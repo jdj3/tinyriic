@@ -1,0 +1,2 @@
+# tinyriic
+Lightweight Interpreter
