@@ -82,7 +82,7 @@ void setup_blk(tr_type type)
     
     if (g_as->next[TR_FREE] > g_as->max - TR_BLK_SIZE)
     {
-        exception(ERR_MEM);
+        EXCEPTION(ERR_MEM);
         return;
     }
     
@@ -148,7 +148,7 @@ tr_addr alloc_addr(tr_type type, tr_val *val)
     
     if ((type == TR_FREE) || (type >= (1<<TR_TYPE_BITS)))
     {
-        exception(ERR_STATE);
+        EXCEPTION(ERR_STATE);
         return 0;
     }
 
@@ -186,7 +186,7 @@ tr_val *lookup_addr(tr_addr addr, tr_type *type_ptr)
 
     if ((type == TR_FREE) || (addr >= g_as->next[type]))
     {
-        exception(ERR_NONE);
+        EXCEPTION(ERR_NONE);
         return NULL;
     }
 
@@ -211,7 +211,7 @@ void init_as()
     
     if (ptr == NULL)
     {
-        exception(ERR_MEM);
+        EXCEPTION(ERR_MEM);
         return;
     }
     

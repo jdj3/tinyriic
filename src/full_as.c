@@ -57,7 +57,7 @@ tr_word val_type_len(tr_type type)
         ret = sizeof(tr_sym);
         break;
     default:
-        exception(ERR_STATE);
+        EXCEPTION(ERR_STATE);
         break;
     }
 
@@ -101,7 +101,7 @@ int cmp_type(tr_type type, tr_blk *blk, tr_addr blk_off, tr_val *val)
         ret = cmp_sym(blk, blk_off, val);
         break;
     default:
-        exception(ERR_STATE);
+        EXCEPTION(ERR_STATE);
         break;
     }
 
@@ -170,7 +170,7 @@ tr_type get_full_type(tr_addr addr)
 
     if (rc != 0)
     {
-        exception(rc);
+        EXCEPTION(rc);
         return 0;
     }
     
@@ -188,7 +188,7 @@ tr_val *lookup_addr(tr_addr addr, tr_type *type_ptr)
     
     if (rc != 0)
     {
-        exception(rc);
+        EXCEPTION(rc);
         return NULL;
     }
     
@@ -211,7 +211,7 @@ tr_val *lookup_addr(tr_addr addr, tr_type *type_ptr)
         return (tr_val *)(blk->arr.pair + blk_off);
         break;
     default:
-        exception(ERR_STATE);
+        EXCEPTION(ERR_STATE);
         break;
     }
     
@@ -231,7 +231,7 @@ void set_full_bit(tr_addr blk_base, tr_type full_bit)
     
     if (tbl == NULL)
     {
-        exception(ERR_STATE);
+        EXCEPTION(ERR_STATE);
         return;
     }
     
@@ -261,7 +261,7 @@ void alloc_tbl(tr_addr dir_idx)
     
     if (tbl == NULL)
     {
-        exception(ERR_MEM);
+        EXCEPTION(ERR_MEM);
         return;
     }
     
@@ -291,7 +291,7 @@ void alloc_blk(tr_tbl *tbl, tr_addr tbl_idx, tr_type type)
         arr_len = sizeof(tr_pair);
         break;
     default:
-        exception(ERR_STATE);
+        EXCEPTION(ERR_STATE);
         break;
     }
     
@@ -302,7 +302,7 @@ void alloc_blk(tr_tbl *tbl, tr_addr tbl_idx, tr_type type)
     
     if (blk == NULL)
     {
-        exception(ERR_MEM);
+        EXCEPTION(ERR_MEM);
         return;
     }
     
@@ -341,7 +341,7 @@ tr_addr alloc_in_blk(tr_tbl *tbl, tr_addr blk_base, tr_type type, tr_val *val)
     
     if (used_idx >= TR_BLK_USED_LEN)
     {
-        exception(ERR_STATE);
+        EXCEPTION(ERR_STATE);
         return 0;
     }
     
@@ -367,7 +367,7 @@ tr_addr alloc_in_blk(tr_tbl *tbl, tr_addr blk_base, tr_type type, tr_val *val)
     
     if (used_shift >= TR_WORD_BITS)
     {
-        exception(ERR_STATE);
+        EXCEPTION(ERR_STATE);
         return 0;
     }
     
@@ -430,7 +430,7 @@ tr_addr alloc_addr(tr_type type, tr_val *val)
         }
     }
     
-    exception(ERR_MEM);
+    EXCEPTION(ERR_MEM);
     return 0;
 }
 
@@ -505,7 +505,7 @@ void init_as()
     
     if (g_as == NULL)
     {
-        exception(ERR_MEM);
+        EXCEPTION(ERR_MEM);
         return;
     }
     

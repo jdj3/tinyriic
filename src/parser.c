@@ -28,6 +28,7 @@
 #include <unistd.h>
 
 #include "tr_as.h"
+#include "parser.h"
 
 extern tr_addr g_empty;
 
@@ -76,18 +77,24 @@ err:
 
 char *g_type_strs[] =
 {
+    "****",
     "word",
     "pair",
     "sym ",
 };
 
-void dump_expr(tr_addr expr_addr, int indent)
+void dump_expr(tr_addr expr_addr, int indent, int max_indent)
 {
     tr_type type;
     tr_val *car_val;
     tr_val *val;
     int i;
 
+    if (indent > max_indent)
+    {
+        return;
+    }
+    
     for (i = 0; i < indent; i++)
     {
         printf("  ");
@@ -104,12 +111,8 @@ void dump_expr(tr_addr expr_addr, int indent)
         break;
     case TR_PAIR:
         printf("0x%08x\n", expr_addr);
-        dump_expr(val->pair.car, indent + 1);
-        car_val = lookup_addr(val->pair.car, &type);
-        if ((type != TR_SYM) || (car_val->sym.str[0] != '#'))
-        {
-            dump_expr(val->pair.cdr, indent + 1);
-        }
+        dump_expr(val->pair.car, indent + 1, max_indent);
+        dump_expr(val->pair.cdr, indent + 1, max_indent);
         break;
     case TR_SYM:
         printf("%s\n", val->sym.str);

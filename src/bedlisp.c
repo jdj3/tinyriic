@@ -29,8 +29,7 @@
 
 #include "tr_as.h"
 #include "parser.h"
-
-typedef tr_addr (*prim_fn)(tr_word argc, tr_addr *argv, tr_addr env);
+#include "prim.h"
 
 tr_addr g_empty;
 tr_addr g_env;
@@ -44,7 +43,7 @@ tr_addr cons(tr_word argc, tr_addr *argv, tr_addr env)
 {
     if (argc != 2)
     {
-        exception(ERR_ARG);
+        EXCEPTION(ERR_ARG);
         return 0;
     }
     
@@ -57,7 +56,7 @@ tr_addr car(tr_word argc, tr_addr *argv, tr_addr env)
     
     if (argc != 1)
     {
-        exception(ERR_ARG);
+        EXCEPTION(ERR_ARG);
         return 0;
     }
     
@@ -72,7 +71,7 @@ tr_addr cdr(tr_word argc, tr_addr *argv, tr_addr env)
     
     if (argc != 1)
     {
-        exception(ERR_ARG);
+        EXCEPTION(ERR_ARG);
         return 0;
     }
     
@@ -87,7 +86,7 @@ tr_addr set_car_e(tr_word argc, tr_addr *argv, tr_addr env)
     
     if (argc != 2)
     {
-        exception(ERR_ARG);
+        EXCEPTION(ERR_ARG);
         return 0;
     }
     
@@ -104,7 +103,7 @@ tr_addr set_cdr_e(tr_word argc, tr_addr *argv, tr_addr env)
     
     if (argc != 2)
     {
-        exception(ERR_ARG);
+        EXCEPTION(ERR_ARG);
         return 0;
     }
     
@@ -178,9 +177,24 @@ tr_addr apply(tr_addr body, tr_word argc, tr_addr *argv, tr_addr env)
     tr_addr arg_list;
     tr_addr new_env;
     tr_type type;
+    prim_fn func;
     tr_addr ret;
     tr_val *val;
     tr_word i;
+    
+    val = lookup_addr(body, &type);
+    
+    if (type == TR_WORD)
+    {
+        func = (prim_fn)val->word;
+        return func(argc, argv, env);
+    }
+    
+    if (type != TR_PAIR)
+    {
+        EXCEPTION(ERR_STATE);
+        return 0;
+    }
     
     new_env = alloc_pair(g_empty, env);
 
@@ -189,12 +203,12 @@ tr_addr apply(tr_addr body, tr_word argc, tr_addr *argv, tr_addr env)
     body = val->pair.cdr;
 
     i = 0;
-    
+
     while (arg_list != g_empty)
     {
         if (i >= argc)
         {
-            exception(ERR_ARG);
+            EXCEPTION(ERR_ARG);
             return 0;
         }
         
@@ -205,7 +219,7 @@ tr_addr apply(tr_addr body, tr_word argc, tr_addr *argv, tr_addr env)
     
     if (i != argc)
     {
-        exception(ERR_ARG);
+        EXCEPTION(ERR_ARG);
         return 0;
     }
 
@@ -225,7 +239,6 @@ tr_addr eval_expr_helper(tr_word argc, tr_addr expr, tr_addr env)
 {
     tr_addr argv[argc];
     tr_addr parent;
-    prim_fn func;
     tr_type type;
     tr_addr next;
     tr_addr body;
@@ -237,22 +250,34 @@ tr_addr eval_expr_helper(tr_word argc, tr_addr expr, tr_addr env)
 
     if (argc < 1)
     {
-        exception(ERR_EXPR);
+        EXCEPTION(ERR_EXPR);
         return 0;
     }
     
     i = 0;
+    next = expr;
 
-    while (expr != g_empty)
+    while (next != g_empty)
     {
-        val = lookup_addr_type(expr, TR_PAIR);
+        val = lookup_addr_type(next, TR_PAIR);
         argv[i++] = val->pair.car;
-        expr = val->pair.cdr;
+        next = val->pair.cdr;
+    }
+
+    argv[0] = eval_expr(argv[0], env);
+
+    val = lookup_addr(argv[0], &type);
+
+    if ((type == TR_SYM) && (val->sym.str[0] == '#'))
+    {
+        return expr;
+    }
+    else if (type != TR_PAIR)
+    {
+        EXCEPTION(ERR_TYPE);
+        return 0;
     }
     
-    argv[0] = eval_expr(argv[0], env);
-    
-    val = lookup_addr_type(argv[0], TR_PAIR);
     sym = val->pair.car;
     val = lookup_addr_type(val->pair.cdr, TR_PAIR);
     body = val->pair.car;
@@ -266,7 +291,7 @@ tr_addr eval_expr_helper(tr_word argc, tr_addr expr, tr_addr env)
     
     if (val->pair.cdr != g_empty)
     {
-        exception(ERR_STATE);
+        EXCEPTION(ERR_STATE);
         return 0;
     }
     
@@ -278,21 +303,7 @@ tr_addr eval_expr_helper(tr_word argc, tr_addr expr, tr_addr env)
         }
     }
     
-    val = lookup_addr(body, &type);
-    
-    if (type == TR_WORD)
-    {
-        func = (prim_fn)val->word;
-        return func(argc-1, argv+1, parent);
-    }
-    
-    else if (type == TR_PAIR)
-    {
-        return apply(body, argc-1, argv+1, parent);
-    }
-    
-    exception(ERR_STATE);
-    return 0;
+    return apply(body, argc-1, argv+1, parent);
 }
 
 int lookup_frame(tr_addr sym, tr_addr frame, tr_val **val_ptr)
@@ -365,7 +376,7 @@ tr_addr eval_expr(tr_addr expr, tr_addr env)
 
         if (rc != 0)
         {
-            exception(rc);
+            EXCEPTION(rc);
             return 0;
         }
         
@@ -385,7 +396,7 @@ tr_addr define(tr_word argc, tr_addr *argv, tr_addr env)
     
     if (argc != 2)
     {
-        exception(ERR_ARG);
+        EXCEPTION(ERR_ARG);
         return 0;
     }
 
@@ -431,7 +442,7 @@ tr_addr let_helper(tr_word argc, tr_addr *argv, tr_addr env, tr_word star)
     
     if (argc < 1)
     {
-        exception(ERR_ARG);
+        EXCEPTION(ERR_ARG);
         return 0;
     }
     
@@ -459,7 +470,7 @@ tr_addr let_helper(tr_word argc, tr_addr *argv, tr_addr env, tr_word star)
 
         if (pair_val->pair.cdr != g_empty)
         {
-            exception(ERR_ARG);
+            EXCEPTION(ERR_ARG);
             return 0;
         }
 
@@ -484,7 +495,7 @@ tr_addr quote(tr_word argc, tr_addr *argv, tr_addr env)
 {
     if (argc != 1)
     {
-        exception(ERR_ARG);
+        EXCEPTION(ERR_ARG);
         return 0;
     }
 
@@ -499,7 +510,7 @@ tr_addr add(tr_word argc, tr_addr *argv, tr_addr env)
     
     if (argc == 0)
     {
-        exception(ERR_ARG);
+        EXCEPTION(ERR_ARG);
         return 0;
     }
 
@@ -521,7 +532,7 @@ tr_addr subtract(tr_word argc, tr_addr *argv, tr_addr env)
     
     if (argc != 2)
     {
-        exception(ERR_ARG);
+        EXCEPTION(ERR_ARG);
         return 0;
     }
 
@@ -539,7 +550,7 @@ tr_addr multiply(tr_word argc, tr_addr *argv, tr_addr env)
     
     if (argc == 0)
     {
-        exception(ERR_ARG);
+        EXCEPTION(ERR_ARG);
         return 0;
     }
     
@@ -561,7 +572,7 @@ tr_addr divide(tr_word argc, tr_addr *argv, tr_addr env)
     
     if (argc != 2)
     {
-        exception(ERR_ARG);
+        EXCEPTION(ERR_ARG);
         return 0;
     }
 
@@ -612,7 +623,7 @@ tr_addr prim_if(tr_word argc, tr_addr *argv, tr_addr env)
     
     if ((argc < 2) || (argc > 3))
     {
-        exception(ERR_ARG);
+        EXCEPTION(ERR_ARG);
         return 0;
     }
 
@@ -675,7 +686,7 @@ tr_addr lambda(tr_word argc, tr_addr *argv, tr_addr env)
     
     if (argc < 1)
     {
-        exception(ERR_ARG);
+        EXCEPTION(ERR_ARG);
         return 0;
     }
 

@@ -27,11 +27,11 @@
 
 #include "tr_types.h"
 
-extern int parse_expr(int fd, tr_addr *addr, char *bound);
+int parse_expr(int fd, tr_addr *addr, char *bound);
 
 #ifdef TR_DEBUG
-extern void dump_expr(tr_addr expr_addr, int indent);
-#define DBEXP(__e) dump_expr((__e), 0);
+void dump_expr(tr_addr expr_addr, int indent, int max_indent);
+#define DBEXP(__e) dump_expr((__e), 0, 8);
 #else
 #define DBEXP(__e)
 #endif

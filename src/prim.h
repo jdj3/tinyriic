@@ -27,8 +27,11 @@
 
 #include "tr_types.h"
 
+typedef tr_addr (*prim_fn)(tr_word argc, tr_addr *argv, tr_addr env);
+
 tr_addr prim_eval(tr_addr expr);
 void prim_print(tr_addr expr);
+void add_builtin(char *sym, prim_fn fn, int spec);
 void init_prim();
 
 #endif

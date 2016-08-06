@@ -27,6 +27,14 @@
 
 #include "tr_types.h"
 
+#ifdef TR_DEBUG
+#define EXCEPTION(__e)                                \
+    DBP("exception @ %s:%d\n", __FILE__, __LINE__);   \
+    exception((__e))
+#else
+#define EXCEPTION exception
+#endif
+
 void exception(int err);
 
 tr_val *lookup_addr(tr_addr addr, tr_type *type_ptr);
@@ -35,63 +43,12 @@ tr_addr alloc_addr(tr_type type, tr_val *val);
 
 void init_as();
 
-static tr_val *lookup_addr_type(tr_addr addr, tr_type type)
-{
-    tr_type ret_type;
-    tr_val *ret;
+tr_val *lookup_addr_type(tr_addr addr, tr_type type);
 
-    ret = lookup_addr(addr, &ret_type);
+tr_addr alloc_word(tr_word num);
 
-    if (ret_type != type)
-    {
-        exception(ERR_TYPE);
-        return NULL;
-    }
+tr_addr alloc_pair(tr_addr car, tr_addr cdr);
 
-    return ret;
-}
-
-static tr_addr alloc_word(tr_word num)
-{
-    tr_addr ret;
-    tr_val val;
-    
-    val.word = num;
-    
-    ret = alloc_addr(TR_WORD, &val);
-    
-    return ret;
-}
-
-static tr_addr alloc_pair(tr_addr car, tr_addr cdr)
-{
-    tr_addr ret;
-    tr_val val;
-    
-    val.pair.car = car;
-    val.pair.cdr = cdr;
-    
-    ret = alloc_addr(TR_PAIR, &val);
-    
-    return ret;
-}
-
-static tr_addr alloc_sym(char *str)
-{
-    tr_addr ret;
-    tr_val val;
-    
-    if (strlen(str) > TR_MAX_TOK)
-    {
-        exception(ERR_RANGE);
-        return 0;
-    }
-    
-    strcpy(val.sym.str, str);
-    
-    ret = alloc_addr(TR_SYM, &val);
-    
-    return ret;
-}
+tr_addr alloc_sym(char *str);
 
 #endif

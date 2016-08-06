@@ -22,40 +22,67 @@
   SOFTWARE.
 */
 
-#include <unistd.h>
+#include <string.h>
+#include <stdio.h>
 
+#include "tr_types.h"
 #include "tr_as.h"
-#include "parser.h"
-#include "prim.h"
 
-extern tr_addr g_env;
-
-int parse_fd(int fd)
+tr_val *lookup_addr_type(tr_addr addr, tr_type type)
 {
-    tr_addr expr_addr;
-    tr_addr expr_ret;
-    char end;
-    int rc;
-    
-    end = 0;
-    rc = parse_expr(fd, &expr_addr, &end);
-    
-    while (rc == 0)
+    tr_type ret_type;
+    tr_val *ret;
+
+    ret = lookup_addr(addr, &ret_type);
+
+    if (ret_type != type)
     {
-        expr_ret = prim_eval(expr_addr);
-        prim_print(expr_ret);
-        rc = parse_expr(fd, &expr_addr, &end);
+        EXCEPTION(ERR_TYPE);
+        return NULL;
     }
-    
-    return rc;
+
+    return ret;
 }
 
-int main(int argc, char **argv)
+tr_addr alloc_word(tr_word num)
 {
-    init_as();
-    init_prim();
-
-    parse_fd(STDIN_FILENO);
+    tr_addr ret;
+    tr_val val;
     
-    return 0;
+    val.word = num;
+    
+    ret = alloc_addr(TR_WORD, &val);
+    
+    return ret;
+}
+
+tr_addr alloc_pair(tr_addr car, tr_addr cdr)
+{
+    tr_addr ret;
+    tr_val val;
+    
+    val.pair.car = car;
+    val.pair.cdr = cdr;
+    
+    ret = alloc_addr(TR_PAIR, &val);
+    
+    return ret;
+}
+
+tr_addr alloc_sym(char *str)
+{
+    tr_addr ret;
+    tr_val val;
+    
+    if (strlen(str) > TR_MAX_TOK)
+    {
+        EXCEPTION(ERR_RANGE);
+        return 0;
+    }
+    
+    strcpy(val.sym.str, str);
+    
+    ret = alloc_addr(TR_SYM, &val);
+    
+    return ret;
 }
