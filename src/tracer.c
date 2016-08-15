@@ -37,11 +37,16 @@ extern tr_addr g_env;
 extern tr_addr g_und;
 extern tr_addr g_true;
 extern tr_addr g_false;
-static pid_t g_pid = -1;
+
+static pid_t g_pid;
+static tr_addr g_hooks;
 
 #if 1
 
 #define ARCH_REG_COUNT (26)
+#define HOOK_INST      (0xcc)
+#define HOOK_LEN       (1)
+#define POS_IDX        (0x10)
 
 char *g_reg_arr[] =
 {
@@ -90,9 +95,295 @@ int parse_fd(int fd)
     return rc;
 }
 
+int peek_poke(tr_word addr, tr_byte *read_buf, tr_byte *write_buf, tr_word len)
+{
+    tr_byte *num_buf;
+    tr_word shift;
+    tr_word align;
+    tr_word copy;
+    long num;
+
+    shift = addr & (sizeof(long)-1);
+    addr &= (~(sizeof(long)-1));
+    num_buf = (tr_byte *)(&num);
+
+    while (len > 0)
+    {
+        copy = sizeof(long) - shift;
+        if (copy > len)
+        {
+            copy = len;
+        }
+
+        num = ptrace(PTRACE_PEEKDATA, g_pid, addr, NULL);
+        DBV("was %016lx\n", num);
+
+        if (read_buf != NULL)
+        {
+            memcpy(read_buf, num_buf + shift, copy);
+            read_buf += copy;
+        }
+
+        if (write_buf != NULL)
+        {
+            memcpy(num_buf + shift, write_buf, copy);
+            DBV("setting to %016lx\n", num);
+            write_buf += copy;
+            ptrace(PTRACE_POKEDATA, g_pid, addr, num);
+        }
+
+        addr += sizeof(long);
+        shift = 0;
+        len -= copy;
+    }
+
+    return 0;
+}
+
+void write_inst(tr_word addr, tr_word inst, tr_word *old_inst)
+{
+#if (HOOK_LEN == 1)
+    uint8_t old;
+    uint8_t new;
+#elif (HOOK_LEN == 4)
+    uint32_t old;
+    uint32_t new;
+#else
+#error invalid HOOK_LEN
+#endif
+
+    new = inst;
+    peek_poke(addr, &old, &new, HOOK_LEN);
+
+    if (old_inst != NULL)
+    {
+        *old_inst = old;
+    }
+}
+
+void write_hook(tr_addr hook)
+{
+    tr_word orig_word;
+    tr_val *addr_val;
+    tr_word shift;
+    tr_word align;
+    tr_addr addr;
+    uint8_t *ptr;
+    tr_val *val;
+    long orig;
+
+    val = lookup_addr_type(hook, TR_PAIR);
+    addr_val = lookup_addr_type(val->pair.car, TR_WORD);
+
+    write_inst(addr_val->word, HOOK_INST, &orig_word);
+
+    val = lookup_addr_type(val->pair.cdr, TR_PAIR);
+    val = lookup_addr_type(val->pair.cdr, TR_PAIR);
+    val->pair.car = alloc_word(orig_word);
+}
+
+#define INST_READ_LEN   (4)
+
+#define X86_VALID       (1<<0)
+#define X86_MODRM       (1<<1)
+#define X86_REX         (1<<2)
+
+tr_word x86_inst_len(tr_byte *inst_arr)
+{
+    tr_byte hi_nyb;
+    tr_byte lo_nyb;
+    tr_byte rex;
+    tr_byte len;
+    tr_byte mod;
+    tr_byte rm;
+    int status;
+
+    status = 0;
+    len = 1;
+
+    DBV("inst %02x %02x %02x\n", inst_arr[0], inst_arr[1], inst_arr[2]);
+
+    hi_nyb = (inst_arr[0] & 0xf0) >> 4;
+    lo_nyb = inst_arr[0] & 0x0f;
+
+    if (hi_nyb == 0x4)
+    {
+        status |= X86_REX;
+        rex = lo_nyb;
+        len += 1;
+        inst_arr++;
+        hi_nyb = (inst_arr[0] & 0xf0) >> 4;
+        lo_nyb = inst_arr[0] & 0x0f;
+    }
+
+    if ((hi_nyb == 0x5) ||
+        ((hi_nyb == 0x9) && ((lo_nyb & 0x8) == 0x0)))
+    {
+        status |= X86_VALID;
+    }
+    else if ((((hi_nyb & 0xc) == 0x0) && ((lo_nyb & 0x4) == 0x0)) ||
+             ((hi_nyb == 0x8) && ((lo_nyb & 0xc) == 0x8)))
+    {
+        status |= X86_VALID | X86_MODRM;
+    }
+    else if ((hi_nyb == 0x8) && ((lo_nyb & 0xc) == 0x4))
+    {
+        status |= X86_VALID | X86_MODRM;
+    }
+    else if (hi_nyb == 0xb)
+    {
+        status |= X86_VALID;
+
+        if ((lo_nyb & 0x8) == 0x0)
+        {
+            len += 1;
+        }
+        else if ((status & X86_MODRM) && ((rex & 0x8) == 0x8))
+        {
+            len += 8;
+        }
+        else
+        {
+            len += 4;
+        }
+    }
+
+    if (status & X86_MODRM)
+    {
+        len += 1;
+        mod = (inst_arr[1] & 0xc) >> 6;
+        rm = inst_arr[1] & 0x7;
+
+        if ((mod != 0x3) && (rm == 0x4))
+        {
+            //SIB
+            len += 1;
+        }
+        if ((mod == 0x0) && (rm == 0x5))
+        {
+            len += 4;
+        }
+        if (mod == 0x1)
+        {
+            len += 1;
+        }
+        if (mod == 0x2)
+        {
+            len += 4;
+        }
+    }
+
+    if (status & X86_VALID)
+    {
+        return len;
+    }
+
+    return 0;
+}
+
+tr_byte get_inst_len(tr_word addr)
+{
+    tr_byte inst_arr[INST_READ_LEN];
+    tr_byte len;
+
+#if 1
+    peek_poke(addr, inst_arr, NULL, INST_READ_LEN);
+
+    len = x86_inst_len(inst_arr);
+
+    DBV("inst len %d\n", len);
+
+    if (len == 0)
+    {
+        EXCEPTION(ERR_INST);
+    }
+#endif
+
+    return len;
+}
+
+int handle_break()
+{
+    tr_word regs[ARCH_REG_COUNT];
+    tr_word orig_word;
+    tr_word inst_len;
+    tr_val *addr_val;
+    tr_val *hook_val;
+    tr_addr cb_expr;
+    tr_addr cb_ret;
+    tr_addr addr;
+    tr_addr hook;
+    tr_word pos;
+    tr_val *val;
+    int status;
+    long orig;
+    long rc;
+
+    memset(regs, 0, sizeof(regs));
+
+    ptrace(PTRACE_GETREGS, g_pid, NULL, regs);
+    regs[POS_IDX] -= HOOK_LEN;
+    pos = regs[POS_IDX];
+    hook = g_hooks;
+
+    while (hook != g_empty)
+    {
+        val = lookup_addr_type(hook, TR_PAIR);
+        hook_val = lookup_addr_type(val->pair.car, TR_PAIR);
+        addr_val = lookup_addr_type(hook_val->pair.car, TR_WORD);
+
+        if (addr_val->word == pos)
+        {
+            DBV("found pos\n");
+            break;
+        }
+
+        hook = val->pair.cdr;
+    }
+
+    if (hook == g_empty)
+    {
+        EXCEPTION(ERR_STATE);
+        return -1;
+    }
+
+    hook_val = lookup_addr_type(hook_val->pair.cdr, TR_PAIR);
+    cb_expr = hook_val->pair.car;
+
+    hook_val = lookup_addr_type(hook_val->pair.cdr, TR_PAIR);
+    hook_val = lookup_addr_type(hook_val->pair.car, TR_WORD);
+
+    write_inst(pos, hook_val->word, NULL);
+    ptrace(PTRACE_SETREGS, g_pid, NULL, regs);
+
+    cb_ret = prim_eval(alloc_pair(cb_expr, g_empty));
+
+    if (cb_ret == g_false)
+    {
+        return -1;
+    }
+
+    inst_len = get_inst_len(pos);
+    write_inst(pos + inst_len, HOOK_INST, &orig_word);
+    ptrace(PTRACE_CONT, g_pid, NULL, NULL);
+
+    rc = waitpid(g_pid, &status, 0);
+    DBV("waitpid ret %ld 0x%08x\n", rc, status);
+
+    ptrace(PTRACE_GETREGS, g_pid, NULL, regs);
+    regs[POS_IDX] -= HOOK_LEN;
+
+    write_inst(pos, HOOK_INST, NULL);
+    write_inst(pos + inst_len, orig_word, NULL);
+    ptrace(PTRACE_SETREGS, g_pid, NULL, regs);
+
+    return 0;
+}
+
 tr_addr attach(tr_word argc, tr_addr *argv, tr_addr env)
 {
-    tr_val *pid_val;
+    tr_addr hook;
+    tr_val *val;
     int status;
     long rc;
 
@@ -102,9 +393,9 @@ tr_addr attach(tr_word argc, tr_addr *argv, tr_addr env)
         return 0;
     }
 
-    pid_val = lookup_addr_type(argv[0], TR_WORD);
+    val = lookup_addr_type(argv[0], TR_WORD);
     
-    rc = ptrace(PTRACE_ATTACH, pid_val->word, NULL, NULL);
+    rc = ptrace(PTRACE_ATTACH, val->word, NULL, NULL);
 
     DBV("PTRACE_ATTACH ret %ld\n", rc);
 
@@ -113,16 +404,37 @@ tr_addr attach(tr_word argc, tr_addr *argv, tr_addr env)
         return g_false;
     }
     
-    g_pid = pid_val->word;
+    g_pid = val->word;
 
     rc = waitpid(g_pid, &status, 0);
-    
     DBV("waitpid ret %ld 0x%08x\n", rc, status);
     
     prim_eval(alloc_pair(argv[1], g_empty));
 
+    hook = g_hooks;
+
+    while (hook != g_empty)
+    {
+        val = lookup_addr_type(hook, TR_PAIR);
+        write_hook(val->pair.car);
+        hook = val->pair.cdr;
+    }
+
+    rc = 0;
+
+    while (rc == 0)
+    {
+        rc = ptrace(PTRACE_CONT, g_pid, NULL, NULL);
+        rc = waitpid(g_pid, &status, 0);
+        DBV("waitpid ret %ld 0x%08x\n", rc, status);
+
+        rc = handle_break();
+    }
+
     rc = ptrace(PTRACE_DETACH, g_pid, NULL, NULL);
-    
+
+    g_pid = -1;
+
     return g_true;
 }
 
@@ -211,6 +523,32 @@ tr_addr set_reg(tr_word argc, tr_addr *argv, tr_addr env)
     return g_und;
 }
 
+tr_addr add_hook(tr_word argc, tr_addr *argv, tr_addr env)
+{
+    tr_addr hook;
+    tr_val *val;
+
+    if (argc != 2)
+    {
+        EXCEPTION(ERR_ARG);
+        return 0;
+    }
+
+    hook = alloc_word(0);
+    hook = alloc_pair(hook, g_empty);
+    hook = alloc_pair(argv[1], hook);
+    hook = alloc_pair(argv[0], hook);
+
+    g_hooks = alloc_pair(hook, g_hooks);
+
+    if (g_pid != -1)
+    {
+        write_hook(hook);
+    }
+
+    return g_und;
+}
+
 void init_tracer()
 {
     tr_addr expr;
@@ -222,6 +560,7 @@ void init_tracer()
     add_builtin("poke-data", poke_data, 0);
     add_builtin("get-reg", get_reg, 0);
     add_builtin("set-reg", set_reg, 0);
+    add_builtin("add-hook", add_hook, 0);
 
     def = alloc_sym("define");
     
@@ -232,6 +571,9 @@ void init_tracer()
         expr = alloc_pair(def, expr);
         prim_eval(expr);
     }
+
+    g_hooks = g_empty;
+    g_pid = -1;
 }
 
 int main(int argc, char **argv)

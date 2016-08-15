@@ -66,6 +66,7 @@ typedef uintptr_t tr_word;
 #define ERR_UND     (-12)
 #define ERR_BIND    (-13)
 #define ERR_EXPR    (-14)
+#define ERR_INST    (-15)
 
 #define TR_MAX_TOK (31)
 #define TR_MAX_SYM (15)
