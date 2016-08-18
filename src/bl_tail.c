@@ -45,6 +45,9 @@ tr_addr g_define;
 tr_addr g_if;
 tr_addr g_and;
 tr_addr g_or;
+tr_addr g_let;
+tr_addr g_let_s;
+tr_addr g_lambda;
 
 tr_addr cons(tr_word argc, tr_addr *argv, tr_addr env)
 {
@@ -177,142 +180,6 @@ tr_addr add_binding(tr_addr sym, tr_addr val, tr_addr env)
     return g_und;
 }
 
-tr_addr eval_expr(tr_addr expr, tr_addr env);
-
-tr_addr apply(tr_addr body, tr_word argc, tr_addr *argv, tr_addr env)
-{
-    tr_addr arg_list;
-    tr_addr new_env;
-    tr_type type;
-    prim_fn func;
-    tr_addr ret;
-    tr_val *val;
-    tr_word i;
-    
-    val = lookup_addr(body, &type);
-    
-    if (type == TR_WORD)
-    {
-        func = (prim_fn)val->word;
-        return func(argc, argv, env);
-    }
-    
-    if (type != TR_PAIR)
-    {
-        EXCEPTION(ERR_STATE);
-        return 0;
-    }
-    
-    new_env = alloc_pair(g_empty, env);
-
-    val = lookup_addr_type(body, TR_PAIR);
-    arg_list = val->pair.car;
-    body = val->pair.cdr;
-
-    i = 0;
-
-    while (arg_list != g_empty)
-    {
-        if (i >= argc)
-        {
-            EXCEPTION(ERR_ARG);
-            return 0;
-        }
-        
-        val = lookup_addr_type(arg_list, TR_PAIR);
-        add_binding(val->pair.car, argv[i++], new_env);
-        arg_list = val->pair.cdr;
-    }
-    
-    if (i != argc)
-    {
-        EXCEPTION(ERR_ARG);
-        return 0;
-    }
-
-    ret = g_und;
-
-    while (body != g_empty)
-    {
-        val = lookup_addr_type(body, TR_PAIR);
-        ret = eval_expr(val->pair.car, new_env);
-        body = val->pair.cdr;
-    }
-    
-    return ret;
-}
-
-tr_addr eval_expr_helper(tr_word argc, tr_addr expr, tr_addr env)
-{
-    tr_addr argv[argc];
-    tr_addr parent;
-    tr_type type;
-    tr_addr next;
-    tr_addr body;
-    tr_addr sym;
-    tr_val *val;
-    tr_word i;
-
-    DBV("eval, argc %ld, env 0x%08x\n", argc, env);
-
-    if (argc < 1)
-    {
-        EXCEPTION(ERR_EXPR);
-        return 0;
-    }
-    
-    i = 0;
-    next = expr;
-
-    while (next != g_empty)
-    {
-        val = lookup_addr_type(next, TR_PAIR);
-        argv[i++] = val->pair.car;
-        next = val->pair.cdr;
-    }
-
-    argv[0] = eval_expr(argv[0], env);
-
-    val = lookup_addr(argv[0], &type);
-
-    if ((type == TR_SYM) && (val->sym.str[0] == '#'))
-    {
-        return expr;
-    }
-    else if (type != TR_PAIR)
-    {
-        EXCEPTION(ERR_TYPE);
-        return 0;
-    }
-    
-    sym = val->pair.car;
-    val = lookup_addr_type(val->pair.cdr, TR_PAIR);
-    body = val->pair.car;
-    val = lookup_addr_type(val->pair.cdr, TR_PAIR);
-    parent = val->pair.car;
-
-    if (parent == g_empty)
-    {
-        parent = env;
-    }
-    
-    if (val->pair.cdr != g_empty)
-    {
-        EXCEPTION(ERR_STATE);
-        return 0;
-    }
-    
-    if (sym == g_func)
-    {
-        for (i = 1; i < argc; i++)
-        {
-            argv[i] = eval_expr(argv[i], env);
-        }
-    }
-    
-    return apply(body, argc-1, argv+1, parent);
-}
-
 int lookup_frame(tr_addr sym, tr_addr frame, tr_val **val_ptr)
 {
     tr_val *frame_val;
@@ -359,13 +226,19 @@ int lookup_env(tr_addr sym, tr_addr env, tr_val **val_ptr)
 
 tr_addr eval_expr(tr_addr expr, tr_addr env)
 {
-    tr_val *found_val;
+    tr_addr parent_env;
+    tr_addr eval_env;
+    tr_val *var_val;
+    prim_fn func;
     tr_type type;
     tr_addr proc;
+    tr_addr next;
     tr_addr args;
+    tr_word argc;
     tr_addr ret;
     tr_addr sym;
     tr_val *val;
+    tr_word i;
     int rc;
 
 tail_expr:
@@ -374,14 +247,16 @@ tail_expr:
 
     if (type == TR_WORD)
     {
-        return expr;
+        ret = expr;
+        goto cleanup;
     }
 
     if (type == TR_SYM)
     {
         if (val->sym.str[0] == '#')
         {
-            return expr;
+            ret = expr;
+            goto cleanup;
         }
         
         rc = lookup_env(expr, env, &val);
@@ -392,7 +267,8 @@ tail_expr:
             return 0;
         }
         
-        return val->pair.car;
+        ret = val->pair.car;
+        goto cleanup;
     }
 
     proc = val->pair.car;
@@ -406,15 +282,18 @@ tail_expr:
         DBV("quote\n");
 
         val = lookup_addr_type(args, TR_PAIR);
-        return val->pair.car;
+        ret = val->pair.car;
     }
     else if (proc == g_begin)
     {
         DBV("begin\n");
 
+    begin:
+
         if (args == g_empty)
         {
-            return g_und;
+            ret = g_und;
+            goto cleanup;
         }
 
         val = lookup_addr_type(args, TR_PAIR);
@@ -437,15 +316,15 @@ tail_expr:
         val = lookup_addr_type(val->pair.cdr, TR_PAIR);
         ret = eval_expr(val->pair.car, env);
 
-        rc = lookup_frame(sym, env, &found_val);
+        rc = lookup_frame(sym, env, &var_val);
         if (rc == 0)
         {
-            found_val->pair.car = ret;
-            return g_und;
+            var_val->pair.car = ret;
+            ret = g_und;
         }
         else
         {
-            return add_binding(sym, ret, env);
+            ret = add_binding(sym, ret, env);
         }
     }
     else if (proc == g_if)
@@ -517,114 +396,158 @@ tail_expr:
         expr = val->pair.car;
         goto tail_expr;
     }
-
-    /*
-    proc = eval_expr(val->pair.car, env);
-
-    if (proc == g_func)
+    else if ((proc == g_let) || (proc == g_let_s))
     {
-        return expr;
-    }
+        parent_env = env;
+        env = alloc_pair(g_empty, parent_env);
 
-    val = lookup_addr(proc, &type);
-
-    if ((type == TR_SYM) && (val->sym.str[0] == '#'))
-    {
-        return expr;
-    }
-    else if (type != TR_PAIR)
-    {
-        EXCEPTION(ERR_TYPE);
-        return 0;
-    }
-
-    sym = val->pair.car;
-    val = lookup_addr_type(val->pair.cdr, TR_PAIR);
-    body = val->pair.car;
-    val = lookup_addr_type(val->pair.cdr, TR_PAIR);
-    parent = val->pair.car;
-
-    if (parent == g_empty)
-    {
-        parent = env;
-    }
-
-    if (val->pair.cdr != g_empty)
-    {
-        EXCEPTION(ERR_STATE);
-        return 0;
-    }
-
-    if (sym == g_func)
-    {
-        for (i = 1; i < argc; i++)
+        if (proc == g_let)
         {
-            argv[i] = eval_expr(argv[i], env);
+            eval_env = parent_env;
         }
-    }
-    */
-}
+        else
+        {
+            eval_env = env;
+        }
 
-tr_addr let_helper(tr_word argc, tr_addr *argv, tr_addr env, tr_word star)
-{
-    tr_word bind_count;
-    tr_addr next_bind;
-    tr_addr eval_env;
-    tr_addr bind_sym;
-    tr_addr val_addr;
-    tr_val *pair_val;
-    tr_addr new_env;
-    
-    if (argc < 1)
-    {
-        EXCEPTION(ERR_ARG);
-        return 0;
+        val = lookup_addr_type(args, TR_PAIR);
+        next = val->pair.car;
+        args = val->pair.cdr;
+
+        while (next != g_empty)
+        {
+            val = lookup_addr_type(next, TR_PAIR);
+            next = val->pair.cdr;
+
+            val = lookup_addr_type(val->pair.car, TR_PAIR);
+            sym = val->pair.car;
+            val = lookup_addr_type(val->pair.cdr, TR_PAIR);
+
+            if (val->pair.cdr != g_empty)
+            {
+                EXCEPTION(ERR_ARG);
+                return 0;
+            }
+
+            expr = eval_expr(val->pair.car, eval_env);
+            add_binding(sym, expr, env);
+        }
+        
+        goto begin;
     }
-    
-    new_env = alloc_pair(g_empty, env);
-    
-    if (star == 0)
+    else if (proc == g_lambda)
     {
-        eval_env = env;
+        ret = alloc_pair(env, g_empty);
+        ret = alloc_pair(args, ret);
+        ret = alloc_pair(g_func, ret);
     }
     else
     {
-        eval_env = new_env;
-    }
+        proc = eval_expr(proc, env);
 
-    next_bind = argv[0];
+        if (proc == g_func)
+        {
+            ret = expr;
+            goto cleanup;
+        }
 
-    while (next_bind != g_empty)
-    {
-        pair_val = lookup_addr_type(next_bind, TR_PAIR);
-        next_bind = pair_val->pair.cdr;
+        val = lookup_addr(proc, &type);
 
-        pair_val = lookup_addr_type(pair_val->pair.car, TR_PAIR);
-        bind_sym = pair_val->pair.car;
-        pair_val = lookup_addr_type(pair_val->pair.cdr, TR_PAIR);
+        if ((type == TR_SYM) && (val->sym.str[0] == '#'))
+        {
+            ret = expr;
+            goto cleanup;
+        }
+        else if (type != TR_PAIR)
+        {
+            EXCEPTION(ERR_TYPE);
+            return 0;
+        }
 
-        if (pair_val->pair.cdr != g_empty)
+        sym = val->pair.car;
+
+        if (sym != g_func)
+        {
+            EXCEPTION(ERR_STATE);
+            return 0;
+        }
+
+        val = lookup_addr_type(val->pair.cdr, TR_PAIR);
+        expr = val->pair.car;
+        next = val->pair.cdr;
+
+        val = lookup_addr(expr, &type);
+
+        if (type == TR_WORD)
+        {
+            func = (prim_fn)val->word;
+            argc = 0;
+            next = args;
+
+            while (next != g_empty)
+            {
+                val = lookup_addr_type(next, TR_PAIR);
+                argc++;
+                next = val->pair.cdr;
+            }
+
+            {
+                tr_addr argv[argc];
+
+                for (i = 0; i < argc; i++)
+                {
+                    val = lookup_addr_type(args, TR_PAIR);
+                    argv[i] = eval_expr(val->pair.car, env);
+                    args = val->pair.cdr;
+                }
+
+                ret = func(argc, argv, env);
+                goto cleanup;
+            }
+        }
+        else if (type != TR_PAIR)
+        {
+            EXCEPTION(ERR_STATE);
+            return 0;
+        }
+
+        val = lookup_addr_type(next, TR_PAIR);
+        eval_env = env;
+        env = alloc_pair(g_empty, val->pair.car);
+
+        if (val->pair.cdr != g_empty)
+        {
+            EXCEPTION(ERR_STATE);
+            return 0;
+        }
+
+        val = lookup_addr_type(expr, TR_PAIR);
+        next = val->pair.car;
+        expr = val->pair.cdr;
+
+        while (next != g_empty)
+        {
+            var_val = lookup_addr_type(next, TR_PAIR);
+            val = lookup_addr_type(args, TR_PAIR);
+            add_binding(var_val->pair.car,
+                        eval_expr(val->pair.car, eval_env), env);
+            next = var_val->pair.cdr;
+            args = val->pair.cdr;
+        }
+
+        if (args != g_empty)
         {
             EXCEPTION(ERR_ARG);
             return 0;
         }
 
-        val_addr = eval_expr(pair_val->pair.car, eval_env);
-        add_binding(bind_sym, val_addr, new_env);
+        args = expr;
+        goto begin;
     }
-    
-    //return begin(argc-1, argv+1, new_env);
-    return 0;
-}
 
-tr_addr let(tr_word argc, tr_addr *argv, tr_addr env)
-{
-    return let_helper(argc, argv, env, 0);
-}
+cleanup:
 
-tr_addr let_s(tr_word argc, tr_addr *argv, tr_addr env)
-{
-    return let_helper(argc, argv, env, 1);
+    return ret;
 }
 
 tr_addr add(tr_word argc, tr_addr *argv, tr_addr env)
@@ -742,34 +665,6 @@ tr_addr eqv_q(tr_word argc, tr_addr *argv, tr_addr env)
     return g_true;
 }
 
-tr_addr lambda(tr_word argc, tr_addr *argv, tr_addr env)
-{
-    tr_addr body_list;
-    tr_addr func_list;
-
-    //DBV("lambda env 0x%08x\n", env);
-    
-    if (argc < 1)
-    {
-        EXCEPTION(ERR_ARG);
-        return 0;
-    }
-
-    body_list = g_empty;
-
-    while (argc > 0)
-    {
-        argc--;
-        body_list = alloc_pair(argv[argc], body_list);
-    }
-
-    func_list = alloc_pair(env, g_empty);
-    func_list = alloc_pair(body_list, func_list);
-    func_list = alloc_pair(g_func, func_list);
-
-    return func_list;
-}
-
 tr_addr prim_eval(tr_addr expr)
 {
     return eval_expr(expr, g_env);
@@ -821,9 +716,6 @@ struct builtin_func builtin_arr[] =
     { "*", multiply, 0 },
     { "/", divide, 0 },
     { "eqv?", eqv_q, 0 },
-    { "let", let, 1 },
-    { "let*", let_s, 1 },
-    { "lambda", lambda, 1 },
 };
 
 void init_builtins()
@@ -850,6 +742,9 @@ void init_prim()
     g_if = alloc_sym("if");
     g_and = alloc_sym("and");
     g_or = alloc_sym("or");
+    g_let = alloc_sym("let");
+    g_let_s = alloc_sym("let*");
+    g_lambda = alloc_sym("lambda");
     g_env = alloc_pair(g_empty, g_empty);
     init_builtins();
 }
