@@ -35,7 +35,6 @@ tr_addr g_empty;
 tr_addr g_env;
 tr_addr g_und;
 tr_addr g_func;
-tr_addr g_spec;
 tr_addr g_true;
 tr_addr g_false;
 
@@ -170,12 +169,18 @@ tr_addr add_binding(tr_addr sym, tr_addr val, tr_addr env)
 {
     tr_val *env_head;
     tr_addr new_ent;
+    tr_addr old_ent;
     
     new_ent = alloc_pair(val, g_empty);
-    new_ent = alloc_pair(sym, new_ent);
+    val = new_ent;
+    new_ent = alloc_pair(sym, val);
+    free_addr(val);
 
     env_head = lookup_addr_type(env, TR_PAIR);
-    env_head->pair.car = alloc_pair(new_ent, env_head->pair.car);
+    old_ent = env_head->pair.car;
+    env_head->pair.car = alloc_pair(new_ent, old_ent);
+    free_addr(new_ent);
+    free_addr(old_ent);
 
     return g_und;
 }
@@ -241,6 +246,8 @@ tr_addr eval_expr(tr_addr expr, tr_addr env)
     tr_word i;
     int rc;
 
+    parent_env = env;
+
 tail_expr:
 
     val = lookup_addr(expr, &type);
@@ -248,6 +255,7 @@ tail_expr:
     if (type == TR_WORD)
     {
         ret = expr;
+        add_ref(ret, 1);
         goto cleanup;
     }
 
@@ -258,7 +266,7 @@ tail_expr:
             ret = expr;
             goto cleanup;
         }
-        
+
         rc = lookup_env(expr, env, &val);
 
         if (rc != 0)
@@ -266,8 +274,9 @@ tail_expr:
             EXCEPTION(rc);
             return 0;
         }
-        
+
         ret = val->pair.car;
+        add_ref(ret, 1);
         goto cleanup;
     }
 
@@ -283,6 +292,7 @@ tail_expr:
 
         val = lookup_addr_type(args, TR_PAIR);
         ret = val->pair.car;
+        add_ref(ret, 1);
     }
     else if (proc == g_begin)
     {
@@ -300,7 +310,8 @@ tail_expr:
 
         while (val->pair.cdr != g_empty)
         {
-            eval_expr(val->pair.car, env);
+            ret = eval_expr(val->pair.car, env);
+            free_addr(ret);
             val = lookup_addr_type(val->pair.cdr, TR_PAIR);
         }
 
@@ -314,18 +325,20 @@ tail_expr:
         val = lookup_addr_type(args, TR_PAIR);
         sym = val->pair.car;
         val = lookup_addr_type(val->pair.cdr, TR_PAIR);
-        ret = eval_expr(val->pair.car, env);
+        expr = eval_expr(val->pair.car, env);
 
         rc = lookup_frame(sym, env, &var_val);
         if (rc == 0)
         {
-            var_val->pair.car = ret;
+            free_addr(var_val->pair.car);
+            var_val->pair.car = expr;
             ret = g_und;
         }
         else
         {
-            ret = add_binding(sym, ret, env);
+            ret = add_binding(sym, expr, env);
         }
+        free_addr(expr);
     }
     else if (proc == g_if)
     {
@@ -345,6 +358,7 @@ tail_expr:
             val = lookup_addr_type(val->pair.cdr, TR_PAIR);
         }
 
+        free_addr(ret);
         expr = val->pair.car;
         goto tail_expr;
     }
@@ -366,6 +380,7 @@ tail_expr:
             {
                 return ret;
             }
+            free_addr(ret);
             val = lookup_addr_type(val->pair.cdr, TR_PAIR);
         }
 
@@ -390,6 +405,7 @@ tail_expr:
             {
                 return ret;
             }
+            free_addr(ret);
             val = lookup_addr_type(val->pair.cdr, TR_PAIR);
         }
 
@@ -431,12 +447,14 @@ tail_expr:
 
             expr = eval_expr(val->pair.car, eval_env);
             add_binding(sym, expr, env);
+            free_addr(expr);
         }
-        
+
         goto begin;
     }
     else if (proc == g_lambda)
     {
+        // TODO: free pairs
         ret = alloc_pair(env, g_empty);
         ret = alloc_pair(args, ret);
         ret = alloc_pair(g_func, ret);
@@ -448,21 +466,11 @@ tail_expr:
         if (proc == g_func)
         {
             ret = expr;
+            add_ref(ret, 1);
             goto cleanup;
         }
 
-        val = lookup_addr(proc, &type);
-
-        if ((type == TR_SYM) && (val->sym.str[0] == '#'))
-        {
-            ret = expr;
-            goto cleanup;
-        }
-        else if (type != TR_PAIR)
-        {
-            EXCEPTION(ERR_TYPE);
-            return 0;
-        }
+        val = lookup_addr_type(proc, TR_PAIR);
 
         sym = val->pair.car;
 
@@ -481,15 +489,7 @@ tail_expr:
         if (type == TR_WORD)
         {
             func = (prim_fn)val->word;
-            argc = 0;
-            next = args;
-
-            while (next != g_empty)
-            {
-                val = lookup_addr_type(next, TR_PAIR);
-                argc++;
-                next = val->pair.cdr;
-            }
+            argc = length_helper(args);
 
             {
                 tr_addr argv[argc];
@@ -502,6 +502,11 @@ tail_expr:
                 }
 
                 ret = func(argc, argv, env);
+                for (i = 0; i < argc; i++)
+                {
+                    free_addr(argv[i]);
+                }
+                free_addr(proc);
                 goto cleanup;
             }
         }
@@ -529,8 +534,9 @@ tail_expr:
         {
             var_val = lookup_addr_type(next, TR_PAIR);
             val = lookup_addr_type(args, TR_PAIR);
-            add_binding(var_val->pair.car,
-                        eval_expr(val->pair.car, eval_env), env);
+            ret = eval_expr(val->pair.car, eval_env);
+            add_binding(var_val->pair.car, ret, env);
+            free_addr(ret);
             next = var_val->pair.cdr;
             args = val->pair.cdr;
         }
@@ -541,11 +547,22 @@ tail_expr:
             return 0;
         }
 
+        if (eval_env != parent_env)
+        {
+            free_addr(eval_env);
+        }
+
+        free_addr(proc);
         args = expr;
         goto begin;
     }
 
 cleanup:
+
+    if (parent_env != env)
+    {
+        free_addr(env);
+    }
 
     return ret;
 }
@@ -667,7 +684,11 @@ tr_addr eqv_q(tr_word argc, tr_addr *argv, tr_addr env)
 
 tr_addr prim_eval(tr_addr expr)
 {
-    return eval_expr(expr, g_env);
+    tr_addr ret;
+
+    ret = eval_expr(expr, g_env);
+    free_addr(expr);
+    return ret;
 }
 
 void prim_print(tr_addr expr)
@@ -676,46 +697,44 @@ void prim_print(tr_addr expr)
 
     argv[0] = expr;
     display(1, argv, g_env);
+    free_addr(expr);
 }
 
-void add_builtin(char *sym, prim_fn fn, int spec)
+void add_builtin(char *sym, prim_fn fn)
 {
     tr_addr new_ent;
+    tr_addr addr;
 
-    new_ent = alloc_pair(g_empty, g_empty);
-    new_ent = alloc_pair(alloc_word((tr_word)fn), new_ent);
-    if (spec)
-    {
-        new_ent = alloc_pair(g_spec, new_ent);
-    }
-    else
-    {
-        new_ent = alloc_pair(g_func, new_ent);
-    }
-    
+    addr = alloc_word((tr_word)fn);
+    new_ent = alloc_pair(addr, g_empty);
+    free_addr(addr);
+    addr = new_ent;
+    new_ent = alloc_pair(g_func, addr);
+    free_addr(addr);
+
     add_binding(alloc_sym(sym), new_ent, g_env);
+    free_addr(new_ent);
 }
 
 struct builtin_func
 {
     char *sym;
     prim_fn fn;
-    int spec;
 };
 
 struct builtin_func builtin_arr[] =
 {
-    { "cons", cons, 0 },
-    { "car", car, 0 },
-    { "cdr", cdr, 0 },
-    { "set-car!", set_car_e, 0 },
-    { "set-cdr!", set_cdr_e, 0 },
-    { "display", display, 0 },
-    { "+", add, 0 },
-    { "-", subtract, 0 },
-    { "*", multiply, 0 },
-    { "/", divide, 0 },
-    { "eqv?", eqv_q, 0 },
+    { "cons", cons },
+    { "car", car },
+    { "cdr", cdr },
+    { "set-car!", set_car_e },
+    { "set-cdr!", set_cdr_e },
+    { "display", display },
+    { "+", add },
+    { "-", subtract },
+    { "*", multiply },
+    { "/", divide },
+    { "eqv?", eqv_q },
 };
 
 void init_builtins()
@@ -724,7 +743,7 @@ void init_builtins()
 
     for (i = 0; i < sizeof(builtin_arr) / sizeof(struct builtin_func); i++)
     {
-        add_builtin(builtin_arr[i].sym, builtin_arr[i].fn, builtin_arr[i].spec);
+        add_builtin(builtin_arr[i].sym, builtin_arr[i].fn);
     }
 }
 
@@ -735,7 +754,6 @@ void init_prim()
     g_true = alloc_sym("#t");
     g_false = alloc_sym("#f");
     g_func = alloc_sym("#function");
-    g_spec = alloc_sym("#special");
     g_quote = alloc_sym("quote");
     g_begin = alloc_sym("begin");
     g_define = alloc_sym("define");
