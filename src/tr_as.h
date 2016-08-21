@@ -41,6 +41,10 @@ tr_val *lookup_addr(tr_addr addr, tr_type *type_ptr);
 
 tr_addr alloc_addr(tr_type type, tr_val *val);
 
+void free_addr(tr_addr addr);
+
+void add_ref(tr_addr addr, int diff);
+
 void init_as();
 
 tr_val *lookup_addr_type(tr_addr addr, tr_type type);

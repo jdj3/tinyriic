@@ -113,6 +113,18 @@ tr_type get_type(tr_addr addr)
     return type;
 }
     
+void add_ref(tr_addr addr, int diff)
+{
+    tr_type type;
+
+    type = get_type(addr);
+
+    if (type != TR_SYM)
+    {
+        g_as->ref[addr] += diff;
+    }
+}
+
 int find_val(tr_val *val, tr_type type, tr_addr *addr_ptr)
 {
     tr_addr ret;
@@ -145,7 +157,7 @@ tr_addr alloc_addr(tr_type type, tr_val *val)
     tr_word type_size;
     tr_addr ret;
     int rc;
-    
+
     if ((type == TR_FREE) || (type >= (1<<TR_TYPE_BITS)))
     {
         EXCEPTION(ERR_STATE);
@@ -155,27 +167,96 @@ tr_addr alloc_addr(tr_type type, tr_val *val)
     if (type == TR_SYM)
     {
         rc = find_val(val, type, &ret);
-        
+
         if (rc == 0)
         {
             return ret;
         }
     }
-    
+
     type_size = g_type_sizes[type];
     type_words = type_size / sizeof(tr_word);
 
-    ret = g_as->next[type];
-    g_as->next[type] += type_words;
-
-    if ((g_as->next[type] % TR_BLK_SIZE) == 0)
+    if (g_as->free[type] == 0)
     {
-        setup_blk(type);
+        ret = g_as->next[type];
+        g_as->next[type] += type_words;
+
+        if ((g_as->next[type] % TR_BLK_SIZE) == 0)
+        {
+            setup_blk(type);
+        }
+    }
+    else
+    {
+        ret = g_as->free[type];
+        g_as->free[type] = g_as->ref[ret];
     }
 
     memcpy(g_as->arr + ret, val, type_size);
+    g_as->ref[ret] = 1;
+
+    if (type == TR_PAIR)
+    {
+        add_ref(val->pair.car, 1);
+        add_ref(val->pair.cdr, 1);
+    }
 
     return ret;
+}
+
+void free_helper(tr_addr addr, tr_slist *prev)
+{
+    tr_slist next;
+    tr_type type;
+    tr_val *val;
+
+    val = lookup_addr(addr, &type);
+
+    if (type == TR_FREE)
+    {
+        EXCEPTION(ERR_STATE);
+        return;
+    }
+    else if (type == TR_SYM)
+    {
+        return;
+    }
+
+    next.link = prev;
+
+    while (prev != NULL)
+    {
+        if (prev->u.addr == addr)
+        {
+            return;
+        }
+        prev = prev->link;
+    }
+
+    // exception if free
+
+    add_ref(addr, -1);
+
+    if (g_as->ref[addr] != 0)
+    {
+        return;
+    }
+
+    if (type == TR_PAIR)
+    {
+        next.u.addr = addr;
+        free_helper(val->pair.car, &next);
+        free_helper(val->pair.cdr, &next);
+    }
+
+    g_as->ref[addr] = g_as->free[type];
+    g_as->free[type] = addr;
+}
+
+void free_addr(tr_addr addr)
+{
+    free_helper(addr, NULL);
 }
 
 tr_val *lookup_addr(tr_addr addr, tr_type *type_ptr)
@@ -205,27 +286,30 @@ void init_as()
 
     len = sizeof(tr_as);
     len += max * sizeof(tr_word);
+    len += max * sizeof(tr_addr);
     len += ((max / TR_BLK_SIZE) / TR_TYPE_DIV) * sizeof(tr_word);
-    
+
     ptr = malloc(len);
-    
+
     if (ptr == NULL)
     {
         EXCEPTION(ERR_MEM);
         return;
     }
-    
+
     memset(ptr, 0, len);
 
     g_as = (tr_as *)ptr;
     ptr += sizeof(tr_as);
     g_as->arr = (tr_word *)ptr;
     ptr += max * sizeof(tr_word);
+    g_as->ref = (tr_addr *)ptr;
+    ptr += max * sizeof(tr_addr);
     g_as->types = (tr_word *)ptr;
 
     g_as->next[TR_FREE] = 0;
 
+    setup_blk(TR_SYM);
     setup_blk(TR_WORD);
     setup_blk(TR_PAIR);
-    setup_blk(TR_SYM);
 }

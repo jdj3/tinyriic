@@ -137,7 +137,7 @@ int parse_expr(int fd, tr_addr *addr, char *bound)
     char end;
     int len;
     int rc;
-    
+
     if (*bound == '(')
     {
         cur_tok[0] = 0;
@@ -147,12 +147,12 @@ int parse_expr(int fd, tr_addr *addr, char *bound)
     {
         rc = read_tok(fd, cur_tok, bound);
     }
-    
+
     if (rc != 0)
     {
         return rc;
     }
-    
+
     if ((cur_tok[0] >= '0') && (cur_tok[0] <= '9'))
     {
         num = strtoul(cur_tok, &endptr, 0);
@@ -172,18 +172,18 @@ int parse_expr(int fd, tr_addr *addr, char *bound)
         new_tail = 0;
         sub_addr = 0;
         ret = g_empty;
-        
+
         *bound = 0;
-        
+
         while (end != ')')
         {
             end = 0;
             sub_addr = g_empty;
-            
+
             rc = parse_expr(fd, &sub_addr, &end);
-            
+
             //DBV("sub rc %d, addr 0x%08x, end 0x%02x\n", rc, sub_addr, end);
-            
+
             // close paren without new token
             if (rc == ERR_PAREN)
             {
@@ -194,9 +194,10 @@ int parse_expr(int fd, tr_addr *addr, char *bound)
             {
                 return rc;
             }
-            
+
             new_tail = alloc_pair(sub_addr, g_empty);
-            
+            free_addr(sub_addr);
+
             if (ret == g_empty)
             {
                 ret = new_tail;
@@ -206,7 +207,7 @@ int parse_expr(int fd, tr_addr *addr, char *bound)
                 val = lookup_addr_type(old_tail, TR_PAIR);
                 val->pair.cdr = new_tail;
             }
-            
+
             old_tail = new_tail;
         }
     }
@@ -214,8 +215,8 @@ int parse_expr(int fd, tr_addr *addr, char *bound)
     {
         return ERR_PAREN;
     }
-    
+
     *addr = ret;
-    
+
     return 0;
 }

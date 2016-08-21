@@ -41,8 +41,10 @@
 typedef struct _tr_as
 {
     tr_word *arr;
+    tr_addr *ref;
     tr_word *types;
     tr_addr next[1<<TR_TYPE_BITS];
+    tr_addr free[1<<TR_TYPE_BITS];
     tr_addr max;
 } tr_as;
 

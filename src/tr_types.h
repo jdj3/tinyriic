@@ -98,4 +98,14 @@ typedef union _tr_val
     tr_sym sym;
 } tr_val;
 
+typedef struct _tr_slist
+{
+    struct _tr_slist *link;
+    union
+    {
+        tr_val val;
+        tr_addr addr;
+    } u;
+} tr_slist;
+
 #endif
