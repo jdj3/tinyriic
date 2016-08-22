@@ -567,86 +567,6 @@ cleanup:
     return ret;
 }
 
-tr_addr add(tr_word argc, tr_addr *argv, tr_addr env)
-{
-    tr_val *val;
-    tr_word ret;
-    tr_word i;
-    
-    if (argc == 0)
-    {
-        EXCEPTION(ERR_ARG);
-        return 0;
-    }
-
-    ret = 0;
-
-    for (i = 0; i < argc; i++)
-    {
-        val = lookup_addr_type(argv[i], TR_WORD);
-        ret += val->word;
-    }
-    
-    return alloc_word(ret);
-}
-
-tr_addr subtract(tr_word argc, tr_addr *argv, tr_addr env)
-{
-    tr_val *a;
-    tr_val *b;
-    
-    if (argc != 2)
-    {
-        EXCEPTION(ERR_ARG);
-        return 0;
-    }
-
-    a = lookup_addr_type(argv[0], TR_WORD);
-    b = lookup_addr_type(argv[1], TR_WORD);
-
-    return alloc_word(a->word - b->word);
-}
-
-tr_addr multiply(tr_word argc, tr_addr *argv, tr_addr env)
-{
-    tr_val *val;
-    tr_word ret;
-    tr_word i;
-    
-    if (argc == 0)
-    {
-        EXCEPTION(ERR_ARG);
-        return 0;
-    }
-    
-    ret = 1;
-    
-    for (i = 0; i < argc; i++)
-    {
-        val = lookup_addr_type(argv[i], TR_WORD);
-        ret *= val->word;
-    }
-    
-    return alloc_word(ret);
-}
-
-tr_addr divide(tr_word argc, tr_addr *argv, tr_addr env)
-{
-    tr_val *a;
-    tr_val *b;
-    
-    if (argc != 2)
-    {
-        EXCEPTION(ERR_ARG);
-        return 0;
-    }
-
-    a = lookup_addr_type(argv[0], TR_WORD);
-    b = lookup_addr_type(argv[1], TR_WORD);
-
-    return alloc_word(a->word / b->word);
-}
-
 tr_addr eqv_q(tr_word argc, tr_addr *argv, tr_addr env)
 {
     tr_type a_type;
@@ -682,12 +602,345 @@ tr_addr eqv_q(tr_word argc, tr_addr *argv, tr_addr env)
     return g_true;
 }
 
+tr_addr equal(tr_word argc, tr_addr *argv, tr_addr env)
+{
+    tr_word first;
+    tr_val *val;
+    tr_word i;
+
+    if (argc == 0)
+    {
+        return g_true;
+    }
+
+    val = lookup_addr_type(argv[0], TR_WORD);
+    first = val->word;
+
+    for (i = 1; i < argc; i++)
+    {
+        val = lookup_addr_type(argv[i], TR_WORD);
+
+        if (!(first == val->word))
+        {
+            return g_false;
+        }
+    }
+
+    return g_true;
+}
+
+tr_addr less_than(tr_word argc, tr_addr *argv, tr_addr env)
+{
+    tr_sword last;
+    tr_val *val;
+    tr_word i;
+
+    if (argc == 0)
+    {
+        return g_true;
+    }
+
+    val = lookup_addr_type(argv[0], TR_WORD);
+    last = val->sword;
+
+    for (i = 1; i < argc; i++)
+    {
+        val = lookup_addr_type(argv[i], TR_WORD);
+
+        if (!(last < val->sword))
+        {
+            return g_false;
+        }
+
+        last = val->sword;
+    }
+
+    return g_true;
+}
+
+tr_addr greater_than(tr_word argc, tr_addr *argv, tr_addr env)
+{
+    tr_sword last;
+    tr_val *val;
+    tr_word i;
+
+    if (argc == 0)
+    {
+        return g_true;
+    }
+
+    val = lookup_addr_type(argv[0], TR_WORD);
+    last = val->sword;
+
+    for (i = 1; i < argc; i++)
+    {
+        val = lookup_addr_type(argv[i], TR_WORD);
+
+        if (!(last > val->sword))
+        {
+            return g_false;
+        }
+
+        last = val->sword;
+    }
+
+    return g_true;
+}
+
+tr_addr less_equal(tr_word argc, tr_addr *argv, tr_addr env)
+{
+    tr_sword last;
+    tr_val *val;
+    tr_word i;
+
+    if (argc == 0)
+    {
+        return g_true;
+    }
+
+    val = lookup_addr_type(argv[0], TR_WORD);
+    last = val->sword;
+
+    for (i = 1; i < argc; i++)
+    {
+        val = lookup_addr_type(argv[i], TR_WORD);
+
+        if (!(last <= val->sword))
+        {
+            return g_false;
+        }
+
+        last = val->sword;
+    }
+
+    return g_true;
+}
+
+tr_addr greater_equal(tr_word argc, tr_addr *argv, tr_addr env)
+{
+    tr_sword last;
+    tr_val *val;
+    tr_word i;
+
+    if (argc == 0)
+    {
+        return g_true;
+    }
+
+    val = lookup_addr_type(argv[0], TR_WORD);
+    last = val->sword;
+
+    for (i = 1; i < argc; i++)
+    {
+        val = lookup_addr_type(argv[i], TR_WORD);
+
+        if (!(last >= val->sword))
+        {
+            return g_false;
+        }
+
+        last = val->sword;
+    }
+
+    return g_true;
+}
+
+tr_addr add(tr_word argc, tr_addr *argv, tr_addr env)
+{
+    tr_sword ret;
+    tr_val *val;
+    tr_word i;
+
+    ret = 0;
+
+    for (i = 0; i < argc; i++)
+    {
+        val = lookup_addr_type(argv[i], TR_WORD);
+        ret += val->sword;
+    }
+
+    return alloc_word((tr_word)ret);
+}
+
+tr_addr subtract(tr_word argc, tr_addr *argv, tr_addr env)
+{
+    tr_sword ret;
+    tr_val *val;
+    tr_word i;
+
+    if (argc == 0)
+    {
+        EXCEPTION(ERR_ARG);
+        return 0;
+    }
+
+    val = lookup_addr_type(argv[0], TR_WORD);
+
+    if (argc == 1)
+    {
+        return alloc_word(0 - val->sword);
+    }
+
+    ret = val->sword;
+
+    for (i = 1; i < argc; i++)
+    {
+        val = lookup_addr_type(argv[i], TR_WORD);
+        ret -= val->sword;
+    }
+
+    return alloc_word((tr_word)ret);
+}
+
+tr_addr multiply(tr_word argc, tr_addr *argv, tr_addr env)
+{
+    tr_sword ret;
+    tr_val *val;
+    tr_word i;
+
+    ret = 1;
+
+    for (i = 0; i < argc; i++)
+    {
+        val = lookup_addr_type(argv[i], TR_WORD);
+        ret *= val->sword;
+    }
+
+    return alloc_word((tr_word)ret);
+}
+
+tr_addr divide(tr_word argc, tr_addr *argv, tr_addr env)
+{
+    tr_sword ret;
+    tr_val *val;
+    tr_word i;
+
+    if (argc == 0)
+    {
+        EXCEPTION(ERR_ARG);
+        return 0;
+    }
+
+    val = lookup_addr_type(argv[0], TR_WORD);
+
+    if (argc == 1)
+    {
+        return alloc_word(1 / val->sword);
+    }
+
+    ret = val->sword;
+
+    for (i = 1; i < argc; i++)
+    {
+        val = lookup_addr_type(argv[i], TR_WORD);
+        ret /= val->sword;
+    }
+
+    return alloc_word((tr_word)ret);
+}
+
+tr_addr lognot(tr_word argc, tr_addr *argv, tr_addr env)
+{
+    tr_val *val;
+
+    if (argc != 1)
+    {
+        EXCEPTION(ERR_ARG);
+        return 0;
+    }
+
+    val = lookup_addr_type(argv[0], TR_WORD);
+
+    return alloc_word(~(val->word));
+}
+
+tr_addr logand(tr_word argc, tr_addr *argv, tr_addr env)
+{
+    tr_word ret;
+    tr_val *val;
+    tr_word i;
+
+    ret = (tr_word)-1;
+
+    for (i = 0; i < argc; i++)
+    {
+        val = lookup_addr_type(argv[i], TR_WORD);
+        ret &= val->sword;
+    }
+
+    return alloc_word(ret);
+}
+
+tr_addr logior(tr_word argc, tr_addr *argv, tr_addr env)
+{
+    tr_word ret;
+    tr_val *val;
+    tr_word i;
+
+    ret = 0;
+
+    for (i = 0; i < argc; i++)
+    {
+        val = lookup_addr_type(argv[i], TR_WORD);
+        ret |= val->sword;
+    }
+
+    return alloc_word(ret);
+}
+
+tr_addr logxor(tr_word argc, tr_addr *argv, tr_addr env)
+{
+    tr_word ret;
+    tr_val *val;
+    tr_word i;
+
+    ret = 0;
+
+    for (i = 0; i < argc; i++)
+    {
+        val = lookup_addr_type(argv[i], TR_WORD);
+        ret ^= val->sword;
+    }
+
+    return alloc_word(ret);
+}
+
+tr_addr ash(tr_word argc, tr_addr *argv, tr_addr env)
+{
+    tr_sword shift;
+    tr_sword ret;
+    tr_val *val;
+
+    if (argc != 2)
+    {
+        EXCEPTION(ERR_ARG);
+        return 0;
+    }
+
+    val = lookup_addr_type(argv[1], TR_WORD);
+    shift = val->sword;
+    val = lookup_addr_type(argv[0], TR_WORD);
+
+    if (shift < 0)
+    {
+        shift = 0 - shift;
+        ret = val->sword >> (shift % TR_WORD_BITS);
+    }
+    else
+    {
+        ret = val->sword << (shift % TR_WORD_BITS);
+    }
+
+    return alloc_word((tr_word)ret);
+}
+
 tr_addr prim_eval(tr_addr expr)
 {
     tr_addr ret;
 
     ret = eval_expr(expr, g_env);
     free_addr(expr);
+
     return ret;
 }
 
@@ -730,11 +983,21 @@ struct builtin_func builtin_arr[] =
     { "set-car!", set_car_e },
     { "set-cdr!", set_cdr_e },
     { "display", display },
+    { "eqv?", eqv_q },
+    { "=", equal },
+    { "<", less_than },
+    { ">", greater_than },
+    { "<=", less_equal },
+    { ">=", greater_equal },
     { "+", add },
     { "-", subtract },
     { "*", multiply },
     { "/", divide },
-    { "eqv?", eqv_q },
+    { "lognot", lognot },
+    { "logand", logand },
+    { "logior", logior },
+    { "logxor", logxor },
+    { "ash", ash },
 };
 
 void init_builtins()

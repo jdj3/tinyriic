@@ -50,6 +50,7 @@
 typedef uint8_t tr_type;
 typedef uint8_t tr_byte;
 typedef uint32_t tr_addr;
+typedef intptr_t tr_sword;
 typedef uintptr_t tr_word;
 
 #define ERR_MISC    (-1)
@@ -93,6 +94,7 @@ typedef struct _tr_sym
 
 typedef union _tr_val
 {
+    tr_sword sword;
     tr_word word;
     tr_pair pair;
     tr_sym sym;
