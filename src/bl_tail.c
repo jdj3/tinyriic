@@ -41,6 +41,7 @@ tr_addr g_false;
 tr_addr g_quote;
 tr_addr g_begin;
 tr_addr g_define;
+tr_addr g_set_e;
 tr_addr g_if;
 tr_addr g_and;
 tr_addr g_or;
@@ -229,6 +230,66 @@ int lookup_env(tr_addr sym, tr_addr env, tr_val **val_ptr)
     return ERR_BIND;
 }
 
+#ifdef TR_DEBUG
+
+void dump_env(tr_addr env)
+{
+    tr_addr frame;
+    tr_type type;
+    tr_addr next;
+    tr_val *val;
+    int rc;
+
+    printf("dump_env %08x\n", env);
+    while (env != g_empty)
+    {
+        val = lookup_addr_type(env, TR_PAIR);
+        frame = val->pair.car;
+        env = val->pair.cdr;
+
+        printf("frame %08x\n", frame);
+
+        while (frame != g_empty)
+        {
+            val = lookup_addr_type(frame, TR_PAIR);
+            next = val->pair.car;
+            frame = val->pair.cdr;
+
+            val = lookup_addr_type(next, TR_PAIR);
+            next = val->pair.cdr;
+            val = lookup_addr_type(val->pair.car, TR_SYM);
+            printf("  sym %-15s ", val->sym.str);
+            val = lookup_addr_type(next, TR_PAIR);
+            printf("addr %08x ", val->pair.car);
+            val = lookup_addr(val->pair.car, &type);
+            if (type == TR_WORD)
+            {
+                printf("word %016lx\n", val->word);
+            }
+            else if (type == TR_SYM)
+            {
+                printf("sym  %s\n", val->sym.str);
+            }
+            else if (type == TR_PAIR)
+            {
+                printf("pair %08x %08x\n", val->pair.car, val->pair.cdr);
+            }
+            else
+            {
+                printf("und\n");
+            }
+        }
+    }
+}
+
+#define DBENV dump_env
+
+#else
+
+#define DBENV(...)
+
+#endif
+
 tr_addr eval_expr(tr_addr expr, tr_addr env)
 {
     tr_addr parent_env;
@@ -320,14 +381,14 @@ tail_expr:
     }
     else if (proc == g_define)
     {
-        DBV("define\n");
-
         val = lookup_addr_type(args, TR_PAIR);
         sym = val->pair.car;
         val = lookup_addr_type(val->pair.cdr, TR_PAIR);
         expr = eval_expr(val->pair.car, env);
+        val = lookup_addr_type(env, TR_PAIR);
+        next = val->pair.car;
 
-        rc = lookup_frame(sym, env, &var_val);
+        rc = lookup_frame(sym, next, &var_val);
         if (rc == 0)
         {
             free_addr(var_val->pair.car);
@@ -337,8 +398,26 @@ tail_expr:
         else
         {
             ret = add_binding(sym, expr, env);
+            free_addr(expr);
         }
-        free_addr(expr);
+    }
+    else if (proc == g_set_e)
+    {
+        val = lookup_addr_type(args, TR_PAIR);
+        sym = val->pair.car;
+        val = lookup_addr_type(val->pair.cdr, TR_PAIR);
+        expr = eval_expr(val->pair.car, env);
+
+        rc = lookup_env(sym, env, &var_val);
+        if (rc != 0)
+        {
+            EXCEPTION(ERR_BIND);
+            return 0;
+        }
+
+        free_addr(var_val->pair.car);
+        var_val->pair.car = expr;
+        ret = g_und;
     }
     else if (proc == g_if)
     {
@@ -1020,6 +1099,7 @@ void init_prim()
     g_quote = alloc_sym("quote");
     g_begin = alloc_sym("begin");
     g_define = alloc_sym("define");
+    g_set_e = alloc_sym("set!");
     g_if = alloc_sym("if");
     g_and = alloc_sym("and");
     g_or = alloc_sym("or");
