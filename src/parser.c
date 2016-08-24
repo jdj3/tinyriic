@@ -22,11 +22,7 @@
   SOFTWARE.
 */
 
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <unistd.h>
-
+#include "syslib.h"
 #include "tr_as.h"
 #include "parser.h"
 
@@ -73,7 +69,7 @@ err:
     return -1;
 }
 
-#ifdef TR_DEBUG
+#if 0
 
 char *g_type_strs[] =
 {
@@ -155,11 +151,20 @@ int parse_expr(int fd, tr_addr *addr, char *bound)
 
     if ((cur_tok[0] >= '0') && (cur_tok[0] <= '9'))
     {
-        num = strtoul(cur_tok, &endptr, 0);
-        if (*endptr != 0)
+        if ((cur_tok[0] == '0') && (cur_tok[1] == 'x'))
+        {
+            rc = parsehex(cur_tok+2, &num);
+        }
+        else
+        {
+            rc = parsedec(cur_tok, &num);
+        }
+
+        if (rc != 0)
         {
             return ERR_NUM;
         }
+
         ret = alloc_word((tr_word)num);
     }
     else if (cur_tok[0] != 0)
@@ -175,14 +180,12 @@ int parse_expr(int fd, tr_addr *addr, char *bound)
 
         *bound = 0;
 
-        while (end != ')')
+        do
         {
             end = 0;
             sub_addr = g_empty;
 
             rc = parse_expr(fd, &sub_addr, &end);
-
-            //DBV("sub rc %d, addr 0x%08x, end 0x%02x\n", rc, sub_addr, end);
 
             // close paren without new token
             if (rc == ERR_PAREN)
@@ -209,7 +212,7 @@ int parse_expr(int fd, tr_addr *addr, char *bound)
             }
 
             old_tail = new_tail;
-        }
+        } while (end != ')');
     }
     else if (*bound == ')')
     {

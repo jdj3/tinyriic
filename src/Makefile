@@ -1,11 +1,10 @@
-full: full_as.o tr_as.o parser.o bedlisp.o repl.o
-	gcc -o $@ $^
+CFLAGS := -nostdlib -nostdinc -fno-asynchronous-unwind-tables -Os -Wl,-s
 
-micro: micro_as.o tr_as.o parser.o bl_tail.o repl.o
-	gcc -o $@ $^
+micro: start.o syslib.o micro_as.o tr_as.o parser.o bl_tail.o repl.o
+	gcc $(CFLAGS) -o $@ $^
 
-tracer: micro_as.o tr_as.o parser.o bedlisp.o tracer.o
-	gcc -o $@ $^
+tracer: start.o syslib.o micro_as.o tr_as.o parser.o bl_tail.o tracer.o
+	gcc $(CFLAGS) -o $@ $^
 
 clean:
-	rm -f *.o full micro tracer
+	rm -f *.o micro tracer

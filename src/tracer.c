@@ -22,12 +22,7 @@
   SOFTWARE.
 */
 
-#include <stdio.h>
-#include <unistd.h>
-#include <sys/ptrace.h>
-#include <sys/wait.h>
-#include <string.h>
-
+#include "syslib.h"
 #include "tr_as.h"
 #include "parser.h"
 #include "prim.h"
@@ -38,7 +33,7 @@ extern tr_addr g_und;
 extern tr_addr g_true;
 extern tr_addr g_false;
 
-static pid_t g_pid;
+static int g_pid;
 static tr_addr g_hooks;
 
 #if 1
@@ -101,7 +96,8 @@ int peek_poke(tr_word addr, tr_byte *read_buf, tr_byte *write_buf, tr_word len)
     tr_word shift;
     tr_word align;
     tr_word copy;
-    long num;
+    tr_word num;
+    long rc;
 
     shift = addr & (sizeof(long)-1);
     addr &= (~(sizeof(long)-1));
@@ -115,8 +111,7 @@ int peek_poke(tr_word addr, tr_byte *read_buf, tr_byte *write_buf, tr_word len)
             copy = len;
         }
 
-        num = ptrace(PTRACE_PEEKDATA, g_pid, addr, NULL);
-        DBV("was %016lx\n", num);
+        rc = ptrace(PTRACE_PEEKDATA, g_pid, (void *)addr, &num);
 
         if (read_buf != NULL)
         {
@@ -127,9 +122,8 @@ int peek_poke(tr_word addr, tr_byte *read_buf, tr_byte *write_buf, tr_word len)
         if (write_buf != NULL)
         {
             memcpy(num_buf + shift, write_buf, copy);
-            DBV("setting to %016lx\n", num);
             write_buf += copy;
-            ptrace(PTRACE_POKEDATA, g_pid, addr, num);
+            ptrace(PTRACE_POKEDATA, g_pid, (void *)addr, (void *)num);
         }
 
         addr += sizeof(long);
@@ -143,11 +137,11 @@ int peek_poke(tr_word addr, tr_byte *read_buf, tr_byte *write_buf, tr_word len)
 void write_inst(tr_word addr, tr_word inst, tr_word *old_inst)
 {
 #if (HOOK_LEN == 1)
-    uint8_t old;
-    uint8_t new;
+    tr_byte old;
+    tr_byte new;
 #elif (HOOK_LEN == 4)
-    uint32_t old;
-    uint32_t new;
+    tr_u32 old;
+    tr_u32 new;
 #else
 #error invalid HOOK_LEN
 #endif
@@ -168,7 +162,7 @@ void write_hook(tr_addr hook)
     tr_word shift;
     tr_word align;
     tr_addr addr;
-    uint8_t *ptr;
+    tr_byte *ptr;
     tr_val *val;
     long orig;
 
@@ -200,8 +194,6 @@ tr_word x86_inst_len(tr_byte *inst_arr)
 
     status = 0;
     len = 1;
-
-    DBV("inst %02x %02x %02x\n", inst_arr[0], inst_arr[1], inst_arr[2]);
 
     hi_nyb = (inst_arr[0] & 0xf0) >> 4;
     lo_nyb = inst_arr[0] & 0x0f;
@@ -291,8 +283,6 @@ tr_byte get_inst_len(tr_word addr)
 
     len = x86_inst_len(inst_arr);
 
-    DBV("inst len %d\n", len);
-
     if (len == 0)
     {
         EXCEPTION(ERR_INST);
@@ -334,7 +324,6 @@ int handle_break()
 
         if (addr_val->word == pos)
         {
-            DBV("found pos\n");
             break;
         }
 
@@ -367,8 +356,12 @@ int handle_break()
     write_inst(pos + inst_len, HOOK_INST, &orig_word);
     ptrace(PTRACE_CONT, g_pid, NULL, NULL);
 
-    rc = waitpid(g_pid, &status, 0);
-    DBV("waitpid ret %ld 0x%08x\n", rc, status);
+    rc = wait4(g_pid, &status, 0, NULL);
+    DBSTR("wait4 ret ");
+    DBHEX(rc);
+    DBSTR(" ");
+    DBHEX(status);
+    DBSTR("\n");
 
     ptrace(PTRACE_GETREGS, g_pid, NULL, regs);
     regs[POS_IDX] -= HOOK_LEN;
@@ -394,10 +387,12 @@ tr_addr attach(tr_word argc, tr_addr *argv, tr_addr env)
     }
 
     val = lookup_addr_type(argv[0], TR_WORD);
-    
+
     rc = ptrace(PTRACE_ATTACH, val->word, NULL, NULL);
 
-    DBV("PTRACE_ATTACH ret %ld\n", rc);
+    DBSTR("PTRACE_ATTACH ret ");
+    DBHEX(rc);
+    DBSTR("\n");
 
     if (rc != 0)
     {
@@ -406,9 +401,13 @@ tr_addr attach(tr_word argc, tr_addr *argv, tr_addr env)
     
     g_pid = val->word;
 
-    rc = waitpid(g_pid, &status, 0);
-    DBV("waitpid ret %ld 0x%08x\n", rc, status);
-    
+    rc = wait4(g_pid, &status, 0, NULL);
+    DBSTR("wait4 ret ");
+    DBHEX(rc);
+    DBSTR(" ");
+    DBHEX(status);
+    DBSTR("\n");
+
     prim_eval(alloc_pair(argv[1], g_empty));
 
     hook = g_hooks;
@@ -425,8 +424,12 @@ tr_addr attach(tr_word argc, tr_addr *argv, tr_addr env)
     while (rc == 0)
     {
         rc = ptrace(PTRACE_CONT, g_pid, NULL, NULL);
-        rc = waitpid(g_pid, &status, 0);
-        DBV("waitpid ret %ld 0x%08x\n", rc, status);
+        rc = wait4(g_pid, &status, 0, NULL);
+        DBSTR("wait4 ret ");
+        DBHEX(rc);
+        DBSTR(" ");
+        DBHEX(status);
+        DBSTR("\n");
 
         rc = handle_break();
     }
@@ -440,6 +443,7 @@ tr_addr attach(tr_word argc, tr_addr *argv, tr_addr env)
 
 tr_addr peek_data(tr_word argc, tr_addr *argv, tr_addr env)
 {
+    tr_word num;
     tr_val *val;
     long rc;
 
@@ -450,10 +454,10 @@ tr_addr peek_data(tr_word argc, tr_addr *argv, tr_addr env)
     }
 
     val = lookup_addr_type(argv[0], TR_WORD);
-    
-    rc = ptrace(PTRACE_PEEKDATA, g_pid, val->word, NULL);
 
-    return alloc_word(rc);
+    rc = ptrace(PTRACE_PEEKDATA, g_pid, (void *)(val->word), &num);
+
+    return alloc_word(num);
 }
 
 tr_addr poke_data(tr_word argc, tr_addr *argv, tr_addr env)
@@ -470,7 +474,8 @@ tr_addr poke_data(tr_word argc, tr_addr *argv, tr_addr env)
     addr_val = lookup_addr_type(argv[0], TR_WORD);
     data_val = lookup_addr_type(argv[1], TR_WORD);
     
-    ptrace(PTRACE_POKEDATA, g_pid, addr_val->word, data_val->word);
+    ptrace(PTRACE_POKEDATA, g_pid, (void *)(addr_val->word),
+           (void *)(data_val->word));
 
     return g_und;
 }
@@ -555,12 +560,12 @@ void init_tracer()
     tr_addr def;
     tr_word i;
     
-    add_builtin("attach", attach, 0);
-    add_builtin("peek-data", peek_data, 0);
-    add_builtin("poke-data", poke_data, 0);
-    add_builtin("get-reg", get_reg, 0);
-    add_builtin("set-reg", set_reg, 0);
-    add_builtin("add-hook", add_hook, 0);
+    add_builtin("attach", attach);
+    add_builtin("peek-data", peek_data);
+    add_builtin("poke-data", poke_data);
+    add_builtin("get-reg", get_reg);
+    add_builtin("set-reg", set_reg);
+    add_builtin("add-hook", add_hook);
 
     def = alloc_sym("define");
     
@@ -582,7 +587,7 @@ int main(int argc, char **argv)
     init_prim();
     init_tracer();
     
-    parse_fd(STDIN_FILENO);
+    parse_fd(STDIN);
     
     return 0;
 }

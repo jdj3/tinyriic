@@ -25,33 +25,26 @@
 #ifndef TR_TYPES_H
 #define TR_TYPES_H
 
-#include <stdint.h>
-
-//#define TR_DEBUG
-#define TR_VERBOSE
+#define TR_DEBUG
 
 #ifdef TR_DEBUG
 
-#define DBP printf
-
-#ifdef TR_VERBOSE
-#define DBV printf
-#else
-#define DBV(...)
-#endif
+#define DBSTR puts
+#define DBHEX puthex
 
 #else
 
-#define DBP(...)
-#define DBV(...)
+#define DBSTR(...)
+#define DBHEX(...)
 
 #endif
 
-typedef uint8_t tr_type;
-typedef uint8_t tr_byte;
-typedef uint32_t tr_addr;
-typedef intptr_t tr_sword;
-typedef uintptr_t tr_word;
+typedef unsigned char tr_type;
+typedef unsigned char tr_byte;
+typedef unsigned int tr_addr;
+typedef unsigned int tr_u32;
+typedef long tr_sword;
+typedef unsigned long tr_word;
 
 #define ERR_MISC    (-1)
 #define ERR_MEM     (-2)

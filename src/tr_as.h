@@ -29,7 +29,13 @@
 
 #ifdef TR_DEBUG
 #define EXCEPTION(__e)                                \
-    DBP("exception @ %s:%d\n", __FILE__, __LINE__);   \
+    DBSTR("exception ");                              \
+    DBHEX((__e));                                     \
+    DBSTR(" @ ");                                     \
+    DBSTR(__FILE__);                                  \
+    DBSTR(":");                                       \
+    DBHEX(__LINE__);                                  \
+    DBSTR("\n");                                      \
     exception((__e))
 #else
 #define EXCEPTION exception

@@ -22,11 +22,7 @@
   SOFTWARE.
 */
 
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <unistd.h>
-
+#include "syslib.h"
 #include "micro_as.h"
 #include "tr_as.h"
 
@@ -42,8 +38,6 @@ tr_word g_type_sizes[] =
 
 void exception(int err)
 {
-    DBV("exception %d\n", err);
-    
     exit(err);
 }
 
@@ -289,7 +283,7 @@ void init_as()
     len += max * sizeof(tr_addr);
     len += ((max / TR_BLK_SIZE) / TR_TYPE_DIV) * sizeof(tr_word);
 
-    ptr = malloc(len);
+    ptr = tr_alloc(len);
 
     if (ptr == NULL)
     {

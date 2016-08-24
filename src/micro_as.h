@@ -25,8 +25,6 @@
 #ifndef MICRO_AS_H
 #define MICRO_AS_H
 
-#include <stdint.h>
-
 #include "tr_types.h"
 
 #define TR_ADDR_BITS    (16)

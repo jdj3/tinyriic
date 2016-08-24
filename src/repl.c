@@ -22,8 +22,7 @@
   SOFTWARE.
 */
 
-#include <unistd.h>
-
+#include "syslib.h"
 #include "tr_as.h"
 #include "parser.h"
 #include "prim.h"
@@ -36,17 +35,17 @@ int parse_fd(int fd)
     tr_addr expr_ret;
     char end;
     int rc;
-    
+
     end = 0;
     rc = parse_expr(fd, &expr_addr, &end);
-    
+
     while (rc == 0)
     {
         expr_ret = prim_eval(expr_addr);
         prim_print(expr_ret);
         rc = parse_expr(fd, &expr_addr, &end);
     }
-    
+
     return rc;
 }
 
@@ -55,7 +54,7 @@ int main(int argc, char **argv)
     init_as();
     init_prim();
 
-    parse_fd(STDIN_FILENO);
+    parse_fd(STDIN);
     
     return 0;
 }

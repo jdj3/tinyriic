@@ -22,11 +22,7 @@
   SOFTWARE.
 */
 
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <unistd.h>
-
+#include "syslib.h"
 #include "tr_as.h"
 #include "parser.h"
 #include "prim.h"
@@ -146,23 +142,25 @@ tr_addr display(tr_word argc, tr_addr *argv, tr_addr env)
     tr_type type;
     tr_val *val;
     tr_word i;
-    
+
     for (i = 0; i < argc; i++)
     {
         val = lookup_addr(argv[i], &type);
 
         if (type == TR_WORD)
         {
-            printf("%016lx ", val->word);
+            puthex(val->word);
         }
         else if (type == TR_SYM)
         {
-            printf("%16s ", val->sym.str);
+            puts(val->sym.str);
         }
+
+        puts(" ");
     }
 
-    printf("\n");
-    
+    puts("\n");
+
     return g_und;
 }
 
@@ -230,7 +228,7 @@ int lookup_env(tr_addr sym, tr_addr env, tr_val **val_ptr)
     return ERR_BIND;
 }
 
-#ifdef TR_DEBUG
+#if 0
 
 void dump_env(tr_addr env)
 {
@@ -349,16 +347,12 @@ tail_expr:
     }
     else if (proc == g_quote)
     {
-        DBV("quote\n");
-
         val = lookup_addr_type(args, TR_PAIR);
         ret = val->pair.car;
         add_ref(ret, 1);
     }
     else if (proc == g_begin)
     {
-        DBV("begin\n");
-
     begin:
 
         if (args == g_empty)
@@ -421,8 +415,6 @@ tail_expr:
     }
     else if (proc == g_if)
     {
-        DBV("if\n");
-
         val = lookup_addr_type(args, TR_PAIR);
         ret = eval_expr(val->pair.car, env);
         val = lookup_addr_type(val->pair.cdr, TR_PAIR);
@@ -443,8 +435,6 @@ tail_expr:
     }
     else if (proc == g_and)
     {
-        DBV("and\n");
-        
         if (args == g_empty)
         {
             return g_true;
@@ -468,8 +458,6 @@ tail_expr:
     }
     else if (proc == g_or)
     {
-        DBV("or\n");
-        
         if (args == g_empty)
         {
             return g_false;

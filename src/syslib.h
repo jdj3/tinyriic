@@ -22,65 +22,54 @@
   SOFTWARE.
 */
 
-#include "syslib.h"
+#ifndef SYSLIB_H
+#define SYSLIB_H
+
 #include "tr_types.h"
-#include "tr_as.h"
 
-tr_val *lookup_addr_type(tr_addr addr, tr_type type)
-{
-    tr_type ret_type;
-    tr_val *ret;
+#define NULL    ((void *)0)
+#define STDIN   (0)
+#define STDOUT  (1)
 
-    ret = lookup_addr(addr, &ret_type);
+#define PTRACE_PEEKDATA (2)
+#define PTRACE_POKEDATA (5)
+#define PTRACE_CONT     (7)
+#define PTRACE_GETREGS  (12)
+#define PTRACE_SETREGS  (13)
+#define PTRACE_ATTACH   (16)
+#define PTRACE_DETACH   (17)
 
-    if (ret_type != type)
-    {
-        EXCEPTION(ERR_TYPE);
-        return NULL;
-    }
+void exit(int status);
 
-    return ret;
-}
+tr_sword read(int fd, void *buf, tr_word count);
 
-tr_addr alloc_word(tr_word num)
-{
-    tr_addr ret;
-    tr_val val;
-    
-    val.word = num;
-    
-    ret = alloc_addr(TR_WORD, &val);
-    
-    return ret;
-}
+tr_sword write(int fd, void *buf, tr_word count);
 
-tr_addr alloc_pair(tr_addr car, tr_addr cdr)
-{
-    tr_addr ret;
-    tr_val val;
-    
-    val.pair.car = car;
-    val.pair.cdr = cdr;
-    
-    ret = alloc_addr(TR_PAIR, &val);
-    
-    return ret;
-}
+void *mmap(void *addr, tr_word length, int prot,
+           int flags, int fd, tr_sword pgoffset);
 
-tr_addr alloc_sym(char *str)
-{
-    tr_addr ret;
-    tr_val val;
-    
-    if (strlen(str) > TR_MAX_TOK)
-    {
-        EXCEPTION(ERR_RANGE);
-        return 0;
-    }
-    
-    strcpy(val.sym.str, str);
-    
-    ret = alloc_addr(TR_SYM, &val);
-    
-    return ret;
-}
+int ptrace(int request, int pid, void *addr, void *data);
+
+int wait4(int pid, int *status, int options, void *rusage);
+
+void *memset(void *s, int c, tr_word n);
+
+void *memcpy(void *dest, void *src, tr_word n);
+
+tr_word strlen(char *s);
+
+char *strcpy(char *dest, char *src);
+
+int strcmp(char *s1, char *s2);
+
+int puts(char *s);
+
+void puthex(tr_word num);
+
+int parsehex(char *s, tr_word *num);
+
+int parsedec(char *s, tr_word *num);
+
+void *tr_alloc(tr_word size);
+
+#endif
