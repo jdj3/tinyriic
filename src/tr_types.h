@@ -41,7 +41,11 @@
 
 typedef unsigned char tr_type;
 typedef unsigned char tr_byte;
+#ifdef TR_AS_micro
+typedef unsigned short tr_addr;
+#else
 typedef unsigned int tr_addr;
+#endif
 typedef unsigned int tr_u32;
 typedef long tr_sword;
 typedef unsigned long tr_word;
