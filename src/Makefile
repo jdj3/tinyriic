@@ -1,8 +1,21 @@
 ARCH ?= $(shell uname -m)
 TR_AS ?= micro
 
+ARCH_PRE :=
+ARCH_FLAGS :=
+
+ifeq ($(ARCH),i386)
+	ARCH_FLAGS := -m32
+else ifeq ($(ARCH),arm)
+	ARCH_PRE := arm-linux-gnueabi-
+else ifeq ($(ARCH),mips)
+	ARCH_PRE := mips-linux-gnu-
+endif
+
+CC := $(ARCH_PRE)gcc $(ARCH_FLAGS)
+
 CFLAGS := -nostdlib -nostdinc -fno-asynchronous-unwind-tables \
-	-Os -Wl,-s -I. -I$(ARCH)
+	-Os -Wl,-s -I. -I$(ARCH) -DTR_ARCH_$(arch) -DTR_AS_$(TR_AS)
 
 HEADERS := $(ARCH)/*.h *.h
 
@@ -18,12 +31,12 @@ BASE_OBJS = $(ARCH_OBJS) $(AS_OBJS)
 
 all: $(PROGS)
 
-$(PROGS): %: bin/$(TR_AS)_%_$(ARCH)
+$(PROGS): %: bin/%_$(TR_AS)_$(ARCH)
 
 .PHONY: clean distclean $(PROGS)
 .SECONDARY: $(BASE_OBJS) $(PROG_OBJS)
 
-bin/$(TR_AS)_%_$(ARCH): build/%.$(TR_AS).$(ARCH).o $(BASE_OBJS) $(HEADERS)
+bin/%_$(TR_AS)_$(ARCH): build/%.$(TR_AS).$(ARCH).o $(BASE_OBJS) $(HEADERS)
 	mkdir -p bin
 	$(CC) $(CFLAGS) -o $@ $(BASE_OBJS) $<
 
