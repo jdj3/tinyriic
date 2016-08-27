@@ -19,15 +19,12 @@ CFLAGS := -nostdlib -nostdinc -fno-asynchronous-unwind-tables \
 
 HEADERS := $(ARCH)/*.h *.h
 
-ARCH_FILES := start syslib $(TR_AS)_as
-AS_FILES := tr_as parser bl_tail
+SRCS := syslib $(TR_AS)_as tr_as parser bl_tail
 PROGS := repl tracer
 
-ARCH_OBJS := $(foreach f,$(ARCH_FILES),build/$(f).$(ARCH).o)
-AS_OBJS := $(foreach f,$(AS_FILES),build/$(f).$(TR_AS).$(ARCH).o)
+BASE_OBJS := build/start.$(ARCH).o \
+	$(foreach f,$(SRCS),build/$(f).$(TR_AS).$(ARCH).o)
 PROG_OBJS := $(foreach f,$(PROGS),build/$(f).$(TR_AS).$(ARCH).o)
-
-BASE_OBJS = $(ARCH_OBJS) $(AS_OBJS)
 
 all: $(PROGS)
 
@@ -44,9 +41,6 @@ build/start.$(ARCH).o: $(ARCH)/start.S
 	$(CC) -c $(CFLAGS) -o $@ $<
 
 build/%.$(TR_AS).$(ARCH).o: %.c $(HEADERS)
-	$(CC) -c $(CFLAGS) -o $@ $<
-
-build/%.$(ARCH).o: %.c $(HEADERS)
 	$(CC) -c $(CFLAGS) -o $@ $<
 
 clean:
