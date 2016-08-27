@@ -22,11 +22,7 @@
   SOFTWARE.
 */
 
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <unistd.h>
-
+#include "syslib.h"
 #include "full_as.h"
 #include "tr_as.h"
 
@@ -34,8 +30,6 @@ tr_as *g_as;
 
 void exception(int err)
 {
-    DBV("exception %d\n", err);
-    
     exit(err);
 }
 
@@ -257,7 +251,7 @@ void alloc_tbl(tr_addr dir_idx)
 {
     tr_tbl *tbl;
     
-    tbl = malloc(sizeof(tr_tbl));
+    tbl = tr_alloc(sizeof(tr_tbl));
     
     if (tbl == NULL)
     {
@@ -298,7 +292,7 @@ void alloc_blk(tr_tbl *tbl, tr_addr tbl_idx, tr_type type)
     arr_len *= (1 << TR_BLK_BITS);
     arr_len += sizeof(tr_blk);
     
-    blk = malloc(arr_len);
+    blk = tr_alloc(arr_len);
     
     if (blk == NULL)
     {
@@ -434,6 +428,14 @@ tr_addr alloc_addr(tr_type type, tr_val *val)
     return 0;
 }
 
+void add_ref(tr_addr addr, int diff)
+{
+}
+
+void free_addr(tr_addr addr)
+{
+}
+
 int val_in_blk(tr_val *val, tr_blk *blk, tr_type type, tr_addr *blk_off_ptr)
 {
     tr_addr used_shift;
@@ -501,7 +503,7 @@ int find_val(tr_val *val, tr_type type, tr_addr *addr_ptr)
 
 void init_as()
 {
-    g_as = malloc(sizeof(tr_as));
+    g_as = tr_alloc(sizeof(tr_as));
     
     if (g_as == NULL)
     {

@@ -25,8 +25,6 @@
 #ifndef FULL_AS_H
 #define FULL_AS_H
 
-#include <stdint.h>
-
 #include "tr_types.h"
 
 #define TR_FULL (0x8)
