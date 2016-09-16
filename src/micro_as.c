@@ -276,7 +276,7 @@ void init_as()
     tr_word len;
     char *ptr;
 
-    max = (1<<16);
+    max = (1<<16) - TR_BLK_SIZE;
 
     len = sizeof(tr_as);
     len += max * sizeof(tr_word);
@@ -301,6 +301,7 @@ void init_as()
     ptr += max * sizeof(tr_addr);
     g_as->types = (tr_word *)ptr;
 
+    g_as->max = (tr_addr)max;
     g_as->next[TR_FREE] = 0;
 
     setup_blk(TR_SYM);

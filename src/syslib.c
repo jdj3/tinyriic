@@ -270,7 +270,7 @@ void *tr_alloc(tr_word size)
 {
     void *ret;
 
-    ret = mmap(NULL, size, 0x3, 0x22, -1, 0);
+    ret = mmap(NULL, size, 0x3, MMAP_PRIVATE | MMAP_ANONYMOUS, -1, 0);
 
     if ((((tr_sword)ret) < 0) && (((tr_sword)ret) > -0x10000))
     {

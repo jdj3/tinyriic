@@ -8,4 +8,7 @@
 #define NR_wait4    (61)
 #define NR_ptrace   (101)
 
+#define MMAP_ANONYMOUS (0x20)
+#define MMAP_PRIVATE   (0x2)
+
 #endif
