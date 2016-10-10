@@ -876,7 +876,71 @@ tr_addr multiply(tr_word argc, tr_addr *argv, tr_addr env)
     return alloc_word((tr_word)ret);
 }
 
-tr_addr divide(tr_word argc, tr_addr *argv, tr_addr env)
+tr_sword long_divide(tr_sword a, tr_sword b, tr_sword *rem)
+{
+#if 0
+
+    if (rem != NULL)
+    {
+        *rem = a % b;
+    }
+
+    return a / b;
+
+#else
+
+    tr_sword s_rem;
+    tr_sword quot;
+    tr_sword idx;
+    tr_word bits;
+    tr_word tmp;
+    tr_word u_a;
+    tr_word u_b;
+    tr_word u_q;
+
+    bits = sizeof(tr_word)*8;
+    u_q = 0;
+    tmp = 0;
+
+    u_a = a >= 0 ? a : -a;
+    u_b = b >= 0 ? b : -b;
+
+    for (idx = bits-1; idx >= 0; idx--)
+    {
+        tmp <<= 1;
+        u_q <<= 1;
+        tmp |= (u_a >> idx) & 1;
+
+        if (tmp >= u_b)
+        {
+            tmp -= u_b;
+            u_q |= 1;
+        }
+    }
+
+    quot = u_q;
+
+    if ((((a ^ b) >> bits-1) & 1) && (quot != 0))
+    {
+        quot = -quot;
+    }
+
+    if ((a < 0) && (tmp != 0))
+    {
+        tmp = -tmp;
+    }
+
+    if (rem != NULL)
+    {
+        *rem = tmp;
+    }
+
+    return quot;
+
+#endif
+}
+
+tr_addr div_quot(tr_word argc, tr_addr *argv, tr_addr env)
 {
     tr_sword ret;
     tr_val *val;
@@ -892,7 +956,7 @@ tr_addr divide(tr_word argc, tr_addr *argv, tr_addr env)
 
     if (argc == 1)
     {
-        return alloc_word(1 / val->sword);
+        return alloc_word(long_divide(1, val->sword, NULL));
     }
 
     ret = val->sword;
@@ -900,8 +964,31 @@ tr_addr divide(tr_word argc, tr_addr *argv, tr_addr env)
     for (i = 1; i < argc; i++)
     {
         val = lookup_addr_type(argv[i], TR_WORD);
-        ret /= val->sword;
+        ret = long_divide(ret, val->sword, NULL);
     }
+
+    return alloc_word((tr_word)ret);
+}
+
+tr_addr div_rem(tr_word argc, tr_addr *argv, tr_addr env)
+{
+    tr_sword ret;
+    tr_val *val;
+    tr_sword a;
+    tr_sword b;
+
+    if (argc != 2)
+    {
+        EXCEPTION(ERR_ARG);
+        return 0;
+    }
+
+    val = lookup_addr_type(argv[0], TR_WORD);
+    a = val->sword;
+    val = lookup_addr_type(argv[1], TR_WORD);
+    b = val->sword;
+
+    long_divide(a, b, &ret);
 
     return alloc_word((tr_word)ret);
 }
@@ -1059,7 +1146,8 @@ struct builtin_func builtin_arr[] =
     { "+", add },
     { "-", subtract },
     { "*", multiply },
-    { "/", divide },
+    { "quotient", div_quot },
+    { "remainder", div_rem },
     { "lognot", lognot },
     { "logand", logand },
     { "logior", logior },
