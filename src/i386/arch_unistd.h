@@ -6,6 +6,7 @@
 #define NR_write    (4)
 #define NR_ptrace   (26)
 #define NR_wait4    (114)
+#define NR_select   (142)
 #define NR_mmap     (192)
 
 #define MMAP_ANONYMOUS (0x20)

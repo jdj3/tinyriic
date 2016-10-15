@@ -59,6 +59,12 @@ int wait4(int pid, int *status, int options, void *rusage)
     return syscall(NR_wait4, pid, status, options, rusage);
 }
 
+int select(int nfds, tr_word *readfds, tr_word *writefds,
+           tr_word *exceptfds, int *timeout)
+{
+    return syscall(NR_select, nfds, readfds, writefds, exceptfds, timeout);
+}
+
 void *memset(void *s, int c, tr_word n)
 {
     char *ptr;
@@ -278,4 +284,16 @@ void *tr_alloc(tr_word size)
     }
 
     return ret;
+}
+
+unsigned int sleep(unsigned int seconds)
+{
+    int timeout[2];
+
+    timeout[0] = seconds;
+    timeout[1] = 0;
+
+    select(1, NULL, NULL, NULL, timeout);
+
+    return 0;
 }

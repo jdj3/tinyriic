@@ -36,12 +36,14 @@ extern tr_addr g_false;
 static int g_pid;
 static tr_addr g_hooks;
 
-#if 1
+#if defined(TR_ARCH_x86_64)
 
 #define ARCH_REG_COUNT (26)
+#define ARCH_REG_TYPE  long
 #define HOOK_INST      (0xcc)
 #define HOOK_LEN       (1)
 #define POS_IDX        (0x10)
+#define TR_X86_FAMILY
 
 char *g_reg_arr[] =
 {
@@ -67,6 +69,60 @@ char *g_reg_arr[] =
     "rsp",
     "ss",
 };
+
+#elif defined(TR_ARCH_mips)
+
+#define ARCH_REG_COUNT (38)
+#define ARCH_REG_TYPE  long long
+#define HOOK_INST      (0xcc)
+#define HOOK_LEN       (4)
+#define POS_IDX        (0x0)
+
+char *g_reg_arr[] =
+{
+    "unk-0",
+    "unk-1",
+    "unk-2",
+    "unk-3",
+    "unk-4",
+    "unk-5",
+    "r0",
+    "r1",
+    "r2",
+    "r3",
+    "r4",
+    "r5",
+    "r6",
+    "r7",
+    "r8",
+    "r9",
+    "r10",
+    "r11",
+    "r12",
+    "r13",
+    "r14",
+    "r15",
+    "r16",
+    "r17",
+    "r18",
+    "r19",
+    "r20",
+    "r21",
+    "r22",
+    "r23",
+    "r24",
+    "r25",
+    "r26",
+    "r27",
+    "r28",
+    "r29",
+    "r30",
+    "r31",
+};
+
+#else
+
+#error invalid arch
 
 #endif
 
@@ -278,7 +334,7 @@ tr_byte get_inst_len(tr_word addr)
     tr_byte inst_arr[INST_READ_LEN];
     tr_byte len;
 
-#if 1
+#ifdef TR_X86_FAMILY
     peek_poke(addr, inst_arr, NULL, INST_READ_LEN);
 
     len = x86_inst_len(inst_arr);
@@ -287,6 +343,8 @@ tr_byte get_inst_len(tr_word addr)
     {
         EXCEPTION(ERR_INST);
     }
+#else
+    len = 4;
 #endif
 
     return len;
@@ -482,7 +540,7 @@ tr_addr poke_data(tr_word argc, tr_addr *argv, tr_addr env)
 
 tr_addr get_reg(tr_word argc, tr_addr *argv, tr_addr env)
 {
-    tr_word regs[ARCH_REG_COUNT];
+    ARCH_REG_TYPE regs[ARCH_REG_COUNT];
     tr_val *val;
     long rc;
     
@@ -498,12 +556,12 @@ tr_addr get_reg(tr_word argc, tr_addr *argv, tr_addr env)
 
     val = lookup_addr_type(argv[0], TR_WORD);
 
-    return alloc_word(regs[val->word]);
+    return alloc_word((tr_word)(regs[val->word]));
 }
 
 tr_addr set_reg(tr_word argc, tr_addr *argv, tr_addr env)
 {
-    tr_word regs[ARCH_REG_COUNT];
+    ARCH_REG_TYPE regs[ARCH_REG_COUNT];
     tr_val *reg_val;
     tr_val *val;
     long rc;
@@ -521,7 +579,7 @@ tr_addr set_reg(tr_word argc, tr_addr *argv, tr_addr env)
     reg_val = lookup_addr_type(argv[0], TR_WORD);
     val = lookup_addr_type(argv[1], TR_WORD);
 
-    regs[reg_val->word] = val->word;
+    regs[reg_val->word] = (ARCH_REG_TYPE)val->word;
     
     rc = ptrace(PTRACE_SETREGS, g_pid, NULL, regs);
 

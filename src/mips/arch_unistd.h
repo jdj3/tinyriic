@@ -7,6 +7,7 @@
 #define NR_ptrace   (4026)
 #define NR_wait4    (4114)
 #define NR_mmap     (4210)
+#define NR_select   (4142)
 
 #define MMAP_ANONYMOUS (0x800)
 #define MMAP_PRIVATE   (0x2)

@@ -52,6 +52,9 @@ int ptrace(int request, int pid, void *addr, void *data);
 
 int wait4(int pid, int *status, int options, void *rusage);
 
+int select(int nfds, tr_word *readfds, tr_word *writefds,
+           tr_word *exceptfds, int *timeout);
+
 void *memset(void *s, int c, tr_word n);
 
 void *memcpy(void *dest, void *src, tr_word n);
@@ -71,5 +74,7 @@ int parsehex(char *s, tr_word *num);
 int parsedec(char *s, tr_word *num);
 
 void *tr_alloc(tr_word size);
+
+unsigned int sleep(unsigned int seconds);
 
 #endif
