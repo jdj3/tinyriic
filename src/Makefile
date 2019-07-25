@@ -11,9 +11,11 @@ else ifeq ($(ARCH),arm)
 	ARCH_PRE := arm-linux-gnueabi-
 else ifeq ($(ARCH),mips)
 	ARCH_PRE := mips-linux-gnu-
+	ARCH_FLAGS := -mips1 -msoft-float -mgp32 -mfp32
 else ifeq ($(ARCH),mipsel)
 	ARCH_PRE := mipsel-linux-gnu-
 	ARCH_DIR := mips
+	ARCH_FLAGS := -mips1 -msoft-float -mgp32 -mfp32
 endif
 
 CC := $(ARCH_PRE)gcc $(ARCH_FLAGS)

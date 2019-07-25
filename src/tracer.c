@@ -80,7 +80,7 @@ char *g_reg_arr[] =
 #define HOOK_LEN       (4)
 #define POS_IDX        (0x40)
 #define HOOK_ADJ       (0)
-#define BREAK_ADJ      (4)
+#define BREAK_ADJ      (0)
 #define USE_PTRACE_USR
 
 char *g_reg_arr[] =
@@ -391,8 +391,7 @@ tr_word ptrace_get_reg(tr_word idx)
     
     long lreg;
     
-    rc = ptrace(PTRACE_PEEKUSR, g_pid, (void *)(idx * sizeof(ARCH_REG_TYPE)),
-                &lreg);
+    rc = ptrace(PTRACE_PEEKUSR, g_pid, (void *)idx, &lreg);
     ret = (tr_word)lreg;
     
 #else
@@ -414,8 +413,7 @@ void ptrace_set_reg(tr_word idx, tr_word data)
 
 #ifdef USE_PTRACE_USR
 
-    rc = ptrace(PTRACE_POKEUSR, g_pid, (void *)(idx * sizeof(ARCH_REG_TYPE)),
-                (void *)data);
+    rc = ptrace(PTRACE_POKEUSR, g_pid, (void *)idx, (void *)data);
 
 #else
     
@@ -616,9 +614,7 @@ tr_addr poke_data(tr_word argc, tr_addr *argv, tr_addr env)
 
 tr_addr get_reg(tr_word argc, tr_addr *argv, tr_addr env)
 {
-    ARCH_REG_TYPE regs[ARCH_REG_COUNT];
     tr_val *val;
-    long rc;
     
     if (argc != 1)
     {
@@ -626,21 +622,15 @@ tr_addr get_reg(tr_word argc, tr_addr *argv, tr_addr env)
         return 0;
     }
     
-    memset(regs, 0, sizeof(regs));
-    
-    rc = ptrace(PTRACE_GETREGS, g_pid, NULL, regs);
-
     val = lookup_addr_type(argv[0], TR_WORD);
 
-    return alloc_word((tr_word)(regs[val->word]));
+    return alloc_word((tr_word)ptrace_get_reg(val->word));
 }
 
 tr_addr set_reg(tr_word argc, tr_addr *argv, tr_addr env)
 {
-    ARCH_REG_TYPE regs[ARCH_REG_COUNT];
     tr_val *reg_val;
     tr_val *val;
-    long rc;
     
     if (argc != 2)
     {
@@ -648,16 +638,9 @@ tr_addr set_reg(tr_word argc, tr_addr *argv, tr_addr env)
         return 0;
     }
     
-    memset(regs, 0, sizeof(regs));
-    
-    rc = ptrace(PTRACE_GETREGS, g_pid, NULL, regs);
-
     reg_val = lookup_addr_type(argv[0], TR_WORD);
     val = lookup_addr_type(argv[1], TR_WORD);
-
-    regs[reg_val->word] = (ARCH_REG_TYPE)val->word;
-    
-    rc = ptrace(PTRACE_SETREGS, g_pid, NULL, regs);
+    ptrace_set_reg(reg_val->word, val->word);
 
     return g_und;
 }
