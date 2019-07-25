@@ -42,6 +42,8 @@ static tr_addr g_hooks;
 #define ARCH_REG_TYPE  long
 #define HOOK_INST      (0xcc)
 #define HOOK_LEN       (1)
+#define HOOK_ADJ       (-HOOK_LEN)
+#define BREAK_ADJ      (0)
 #define POS_IDX        (0x10)
 #define TR_X86_FAMILY
 
@@ -72,20 +74,17 @@ char *g_reg_arr[] =
 
 #elif defined(TR_ARCH_mips)
 
-#define ARCH_REG_COUNT (38)
+#define ARCH_REG_COUNT (72)
 #define ARCH_REG_TYPE  long long
-#define HOOK_INST      (0xcc)
+#define HOOK_INST      (0xd)
 #define HOOK_LEN       (4)
-#define POS_IDX        (0x0)
+#define POS_IDX        (0x40)
+#define HOOK_ADJ       (0)
+#define BREAK_ADJ      (4)
+#define USE_PTRACE_USR
 
 char *g_reg_arr[] =
 {
-    "unk-0",
-    "unk-1",
-    "unk-2",
-    "unk-3",
-    "unk-4",
-    "unk-5",
     "r0",
     "r1",
     "r2",
@@ -118,6 +117,39 @@ char *g_reg_arr[] =
     "r29",
     "r30",
     "r31",
+    "fp0",
+    "fp1",
+    "fp2",
+    "fp3",
+    "fp4",
+    "fp5",
+    "fp6",
+    "fp7",
+    "fp8",
+    "fp9",
+    "fp10",
+    "fp11",
+    "fp12",
+    "fp13",
+    "fp14",
+    "fp15",
+    "fp16",
+    "fp17",
+    "fp18",
+    "fp19",
+    "fp20",
+    "fp21",
+    "fp22",
+    "fp23",
+    "fp24",
+    "fp25",
+    "fp26",
+    "fp27",
+    "fp28",
+    "fp29",
+    "fp30",
+    "fp31",
+    "pc",
 };
 
 #else
@@ -203,7 +235,7 @@ void write_inst(tr_word addr, tr_word inst, tr_word *old_inst)
 #endif
 
     new = inst;
-    peek_poke(addr, &old, &new, HOOK_LEN);
+    peek_poke(addr, (tr_byte *)&old, (tr_byte *)&new, HOOK_LEN);
 
     if (old_inst != NULL)
     {
@@ -350,9 +382,56 @@ tr_byte get_inst_len(tr_word addr)
     return len;
 }
 
+tr_word ptrace_get_reg(tr_word idx)
+{
+    tr_word ret;
+    long rc;
+    
+#ifdef USE_PTRACE_USR
+    
+    long lreg;
+    
+    rc = ptrace(PTRACE_PEEKUSR, g_pid, (void *)(idx * sizeof(ARCH_REG_TYPE)),
+                &lreg);
+    ret = (tr_word)lreg;
+    
+#else
+    
+    ARCH_REG_TYPE regs[ARCH_REG_COUNT];
+    
+    memset(regs, 0, sizeof(regs));
+    rc = ptrace(PTRACE_GETREGS, g_pid, NULL, regs);
+    ret = regs[idx];
+
+#endif
+
+    return ret;
+}
+
+void ptrace_set_reg(tr_word idx, tr_word data)
+{
+    long rc;
+
+#ifdef USE_PTRACE_USR
+
+    rc = ptrace(PTRACE_POKEUSR, g_pid, (void *)(idx * sizeof(ARCH_REG_TYPE)),
+                (void *)data);
+
+#else
+    
+    ARCH_REG_TYPE regs[ARCH_REG_COUNT];
+    
+    memset(regs, 0, sizeof(regs));
+    rc = ptrace(PTRACE_GETREGS, g_pid, NULL, regs);
+    regs[idx] = (ARCH_REG_TYPE)data;
+    rc = ptrace(PTRACE_SETREGS, g_pid, NULL, regs);
+
+#endif
+
+}
+
 int handle_break()
 {
-    tr_word regs[ARCH_REG_COUNT];
     tr_word orig_word;
     tr_word inst_len;
     tr_val *addr_val;
@@ -367,11 +446,8 @@ int handle_break()
     long orig;
     long rc;
 
-    memset(regs, 0, sizeof(regs));
-
-    ptrace(PTRACE_GETREGS, g_pid, NULL, regs);
-    regs[POS_IDX] -= HOOK_LEN;
-    pos = regs[POS_IDX];
+    pos = ptrace_get_reg(POS_IDX);
+    pos += HOOK_ADJ;
     hook = g_hooks;
 
     while (hook != g_empty)
@@ -380,7 +456,7 @@ int handle_break()
         hook_val = lookup_addr_type(val->pair.car, TR_PAIR);
         addr_val = lookup_addr_type(hook_val->pair.car, TR_WORD);
 
-        if (addr_val->word == pos)
+        if (addr_val->word + BREAK_ADJ == pos)
         {
             break;
         }
@@ -401,7 +477,7 @@ int handle_break()
     hook_val = lookup_addr_type(hook_val->pair.car, TR_WORD);
 
     write_inst(pos, hook_val->word, NULL);
-    ptrace(PTRACE_SETREGS, g_pid, NULL, regs);
+    ptrace_set_reg(POS_IDX, pos);
 
     cb_ret = prim_eval(alloc_pair(cb_expr, g_empty));
 
@@ -421,12 +497,12 @@ int handle_break()
     DBHEX(status);
     DBSTR("\n");
 
-    ptrace(PTRACE_GETREGS, g_pid, NULL, regs);
-    regs[POS_IDX] -= HOOK_LEN;
+    pos = ptrace_get_reg(POS_IDX);
+    pos += HOOK_ADJ;
 
     write_inst(pos, HOOK_INST, NULL);
     write_inst(pos + inst_len, orig_word, NULL);
-    ptrace(PTRACE_SETREGS, g_pid, NULL, regs);
+    ptrace_set_reg(POS_IDX, pos + inst_len);
 
     return 0;
 }

@@ -32,7 +32,9 @@
 #define STDOUT  (1)
 
 #define PTRACE_PEEKDATA (2)
+#define PTRACE_PEEKUSR  (3)
 #define PTRACE_POKEDATA (5)
+#define PTRACE_POKEUSR  (6)
 #define PTRACE_CONT     (7)
 #define PTRACE_GETREGS  (12)
 #define PTRACE_SETREGS  (13)
