@@ -42,8 +42,7 @@ static tr_addr g_hooks;
 #define ARCH_REG_TYPE  long
 #define HOOK_INST      (0xcc)
 #define HOOK_LEN       (1)
-#define HOOK_ADJ       (-HOOK_LEN)
-#define BREAK_ADJ      (0)
+#define BREAK_ADJ      (-HOOK_LEN)
 #define POS_IDX        (0x10)
 #define TR_X86_FAMILY
 
@@ -79,7 +78,6 @@ char *g_reg_arr[] =
 #define HOOK_INST      (0xd)
 #define HOOK_LEN       (4)
 #define POS_IDX        (0x40)
-#define HOOK_ADJ       (0)
 #define BREAK_ADJ      (0)
 #define USE_PTRACE_USR
 
@@ -149,6 +147,35 @@ char *g_reg_arr[] =
     "fp29",
     "fp30",
     "fp31",
+    "pc",
+};
+
+#elif defined(TR_ARCH_arm)
+
+#define ARCH_REG_COUNT (18)
+#define ARCH_REG_TYPE  long
+#define HOOK_INST      (0xe1200070)
+#define HOOK_LEN       (4)
+#define POS_IDX        (15)
+#define BREAK_ADJ      (0)
+
+char *g_reg_arr[] =
+{
+    "r0",
+    "r1",
+    "r2",
+    "r3",
+    "r4",
+    "r5",
+    "r6",
+    "r7",
+    "r8",
+    "r9",
+    "r10",
+    "r11",
+    "r12",
+    "sp",
+    "lr",
     "pc",
 };
 
@@ -445,7 +472,7 @@ int handle_break()
     long rc;
 
     pos = ptrace_get_reg(POS_IDX);
-    pos += HOOK_ADJ;
+    pos += BREAK_ADJ;
     hook = g_hooks;
 
     while (hook != g_empty)
@@ -454,7 +481,7 @@ int handle_break()
         hook_val = lookup_addr_type(val->pair.car, TR_PAIR);
         addr_val = lookup_addr_type(hook_val->pair.car, TR_WORD);
 
-        if (addr_val->word + BREAK_ADJ == pos)
+        if (addr_val->word == pos)
         {
             break;
         }
@@ -494,9 +521,6 @@ int handle_break()
     DBSTR(" ");
     DBHEX(status);
     DBSTR("\n");
-
-    pos = ptrace_get_reg(POS_IDX);
-    pos += HOOK_ADJ;
 
     write_inst(pos, HOOK_INST, NULL);
     write_inst(pos + inst_len, orig_word, NULL);
